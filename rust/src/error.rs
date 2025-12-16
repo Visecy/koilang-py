@@ -6,25 +6,21 @@
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
-use koicore::parser::error::{ ParseError, ParserLineSource };
+use koicore::parser::error::ParseError;
 
 use crate::traceback::{PyParserLineSource, PyTracebackEntry};
 
-impl From<ParserLineSource> for PyParserLineSource {
-    fn from(source: ParserLineSource) -> Self {
-        Self {
-            filename: source.filename,
-            lineno: source.lineno,
-            text: Some(source.text),
-        }
-    }
-}
-
 /// Base class for all KoiLang parsing errors
-#[pyclass(name = "KoiParseError", subclass, extends = PyException)]
+///
+/// This is the root exception class for all parsing errors that can occur
+/// when parsing KoiLang files. It provides access to traceback information
+/// and source location details for debugging parsing issues.
+#[pyclass(name = "KoiParseError", subclass, extends = PyException, module = "koilang.core.error")]
 pub struct PyParseError {
+    /// Optional traceback entry containing detailed parsing context
     #[pyo3(get)]
     traceback: Option<PyTracebackEntry>,
+    /// Optional source information containing file path and line number
     #[pyo3(get)]
     source: Option<PyParserLineSource>,
 }
@@ -49,9 +45,14 @@ impl PyParseError {
     }
 }
 
-/// KoiParserSyntaxError - thrown when there are syntax errors in the input
-#[pyclass(name = "KoiParserSyntaxError", extends = PyParseError)]
+/// Exception thrown when there are syntax errors in the input
+///
+/// This error is raised when the parser encounters malformed KoiLang syntax
+/// that cannot be processed. The error message will describe what was expected
+/// and what was found instead.
+#[pyclass(name = "KoiParserSyntaxError", extends = PyParseError, module = "koilang.core.error")]
 pub struct KoiParserSyntaxError {
+    /// Human-readable error message describing the syntax error
     message: String,
 }
 
@@ -82,9 +83,14 @@ impl KoiParserSyntaxError {
 }
 
 
-/// KoiParserUnexpectedInputError - thrown when parser encounters unexpected input
-#[pyclass(name = "KoiParserUnexpectedInputError", extends = PyParseError)]
+/// Exception thrown when parser encounters unexpected input
+///
+/// This error is raised when the parser expects one type of token or structure
+/// but encounters something different. The remaining input that caused the issue
+/// is preserved for debugging purposes.
+#[pyclass(name = "KoiParserUnexpectedInputError", extends = PyParseError, module = "koilang.core.error")]
 pub struct KoiParserUnexpectedInputError {
+    /// The remaining input that caused the unexpected input error
     remaining: String,
 }
 
@@ -118,8 +124,12 @@ impl KoiParserUnexpectedInputError {
     }
 }
 
-/// KoiParserUnexpectedEofError - thrown when parser reaches unexpected end of input
-#[pyclass(name = "KoiParserUnexpectedEofError", extends = PyParseError)]
+/// Exception thrown when parser reaches unexpected end of input
+///
+/// This error is raised when the parser expects more input but encounters
+/// the end of file unexpectedly. The error message describes what was expected
+/// to be found.
+#[pyclass(name = "KoiParserUnexpectedEofError", extends = PyParseError, module = "koilang.core.error")]
 pub struct KoiParserUnexpectedEofError {
     /// Description of what was expected when EOF was encountered
     expected: String,
@@ -155,6 +165,12 @@ impl KoiParserUnexpectedEofError {
     }
 }
 
+/// Convert a ParseError to an appropriate Python exception
+///
+/// This function maps the internal ParseError to the corresponding Python
+/// exception type based on the error information contained within it.
+/// It handles different error types including syntax errors, unexpected input,
+/// unexpected EOF, and IO errors.
 pub fn raise_parser_err(error: Box<ParseError>) -> PyErr {
     match error.error_info {
         koicore::parser::error::ErrorInfo::SyntaxError { message } => {

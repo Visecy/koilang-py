@@ -48,9 +48,9 @@ dependencies = [
 
 [[package]]
 name = "koicore"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e5bd27558c2e85a1b864e1057810f6fdcfd6c737d299740808083054b415abe"
+checksum = "05c760183aeb3704d140633eceadce3ba69f17cb79e08737fa43ba16eaa9c11a"
 dependencies = [
  "encoding_rs",
  "nom",
