@@ -9,5 +9,5 @@ name = "core"
 crate-type = ["cdylib"]
 
 [dependencies]
-koicore = "0.2.0"
+koicore = "0.2.1"
 pyo3 = { version = "0.27.1", features = ["experimental-inspect"] }

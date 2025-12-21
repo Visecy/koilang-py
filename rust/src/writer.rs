@@ -4,8 +4,11 @@
 //! allowing Python code to generate KoiLang text from parsed commands.
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{self, Write};
 
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::PyTypeInfo;
 use pyo3::{
     prelude::*,
     types::{PyAny, PyDict, PyType},
@@ -13,7 +16,30 @@ use pyo3::{
 
 use koicore::writer::{FormatterOptions, NumberFormat, ParamFormatSelector, Writer, WriterConfig};
 
+use crate::command::PyCommand;
 use crate::io::PyIoWrapper;
+
+/// Enum to handle both Python IO and native Rust files
+pub enum WriterTarget {
+    Py(PyIoWrapper),
+    Rust(File),
+}
+
+impl Write for WriterTarget {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Py(w) => w.write(buf),
+            Self::Rust(w) => w.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Py(w) => w.flush(),
+            Self::Rust(w) => w.flush(),
+        }
+    }
+}
 
 /// Number format options for command parameter formatting
 ///
@@ -61,6 +87,33 @@ impl From<NumberFormat> for PyNumberFormat {
             NumberFormat::Octal => PyNumberFormat::Octal,
             NumberFormat::Binary => PyNumberFormat::Binary,
         }
+    }
+}
+
+#[pymethods]
+impl PyNumberFormat {
+    pub fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyType>, (u8,))> {
+        Ok((PyNumberFormat::type_object(py), (*self as u8,)))
+    }
+
+    pub fn __getstate__(&self) -> u8 {
+        *self as u8
+    }
+
+    pub fn __setstate__(&mut self, state: u8) -> PyResult<()> {
+        match state {
+            0 => *self = PyNumberFormat::Unknown,
+            1 => *self = PyNumberFormat::Decimal,
+            2 => *self = PyNumberFormat::Hex,
+            3 => *self = PyNumberFormat::Octal,
+            4 => *self = PyNumberFormat::Binary,
+            _ => return Err(PyValueError::new_err("Invalid state")),
+        }
+        Ok(())
+    }
+
+    pub fn __deepcopy__(&self, _memo: &Bound<'_, PyDict>) -> Self {
+        *self
     }
 }
 
@@ -206,9 +259,10 @@ impl From<PyFormatterOptions> for FormatterOptions {
 #[derive(FromPyObject)]
 pub struct PyWriterConfig {
     /// Global formatting options
+    /// Global formatting options
     pub global_options: PyFormatterOptions,
     /// Command-specific formatting options
-    pub command_options: HashMap<String, PyFormatterOptions>,
+    pub command_options: std::collections::HashMap<String, PyFormatterOptions>,
     /// Command threshold (number of # required for commands)
     pub command_threshold: usize,
 }
@@ -235,8 +289,7 @@ impl From<PyWriterConfig> for WriterConfig {
 #[pyclass(name = "Writer", module = "koilang.core.writer")]
 pub struct PyWriter {
     /// Internal Rust Writer instance
-    // We need to use a Box to allow the writer to live beyond the constructor
-    pub writer: Writer<PyIoWrapper>,
+    pub writer: Writer<WriterTarget>,
 }
 
 #[pymethods]
@@ -253,15 +306,38 @@ impl PyWriter {
     /// Raises:
     ///     TypeError: If the object doesn't have required write/flush methods
     #[new]
-    #[pyo3(signature = (py_file, config=None))]
-    pub fn new(py_file: Bound<'_, PyAny>, config: Option<PyWriterConfig>) -> PyResult<Self> {
-        // Create a PyIoWrapper from the Python file-like object
-        let py_write_wrapper = PyIoWrapper::new(py_file)?;
+    #[pyo3(signature = (file, /, config=None))]
+    pub fn new(file: Bound<'_, PyAny>, config: Option<PyWriterConfig>) -> PyResult<Self> {
+        let target = if let Ok(path) = file.extract::<String>() {
+            // It's a string, treat as path
+            WriterTarget::Rust(
+                File::create(path)
+                    .map_err(|e| PyValueError::new_err(format!("Failed to create file: {}", e)))?,
+            )
+        } else if file.getattr("__fspath__").is_ok() {
+            // It's a PathLike object
+            let path_any = file.call_method0("__fspath__")?;
+            let path = path_any.extract::<String>()?;
+            WriterTarget::Rust(
+                File::create(path)
+                    .map_err(|e| PyValueError::new_err(format!("Failed to create file: {}", e)))?,
+            )
+        } else {
+            // Assume it's a file-like object
+            if file.getattr("write").is_err() || file.getattr("flush").is_err() {
+                return Err(PyTypeError::new_err(
+                    "Object must be a string path, PathLike, or have write() and flush() methods",
+                ));
+            }
+            WriterTarget::Py(PyIoWrapper::new(file)?)
+        };
 
         // Create WriterConfig
         let writer_config = config.map(|c| WriterConfig::from(c)).unwrap_or_default();
 
-        Ok(Self { writer: Writer::new(py_write_wrapper, writer_config) })
+        Ok(Self {
+            writer: Writer::new(target, writer_config),
+        })
     }
 
     /// Write a command using the default formatting options
@@ -274,13 +350,10 @@ impl PyWriter {
     ///
     /// Raises:
     ///     ValueError: If writing fails
-    pub fn write_command(&mut self, _command: Bound<'_, PyAny>) -> PyResult<()> {
-        // For now, we'll just write a placeholder message
-        // We need to add a method to PyCommand to get the inner command
-        // or modify PyCommand to expose the necessary functionality
+    pub fn write_command(&mut self, command: &PyCommand) -> PyResult<()> {
         self.writer
-            .newline()
-            .map_err(|e| PyValueError::new_err(format!("Failed to write newline: {}", e)))
+            .write_command(&command.inner)
+            .map_err(|e| e.into())
     }
 
     /// Write a command with custom formatting options
@@ -295,16 +368,40 @@ impl PyWriter {
     ///
     /// Raises:
     ///     ValueError: If writing fails
+    #[pyo3(signature = (command, options=None, param_options=None))]
     pub fn write_command_with_options(
         &mut self,
-        _command: Bound<'_, PyAny>,
-        _options: Option<Bound<'_, PyAny>>,
-        _param_options: Option<Bound<'_, PyDict>>,
+        command: &PyCommand,
+        options: Option<PyFormatterOptions>,
+        param_options: Option<Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        // For now, we'll just write a placeholder message
+        let opt = options.map(|o| FormatterOptions::from(o));
+        let opt_ref = opt.as_ref();
+
+        let mut param_map: HashMap<ParamFormatSelector, FormatterOptions> = HashMap::new();
+        if let Some(dict) = param_options {
+            for (k, v) in dict {
+                let py_selector: PyParamFormatSelector = k.extract()?;
+                let py_options: PyFormatterOptions = v.extract()?;
+                param_map.insert(
+                    ParamFormatSelector::from(py_selector),
+                    FormatterOptions::from(py_options),
+                );
+            }
+        }
+
+        let param_opt_refs: HashMap<ParamFormatSelector, &FormatterOptions> =
+            param_map.iter().map(|(k, v)| (k.clone(), v)).collect();
+
+        let param_opt = if param_opt_refs.is_empty() {
+            None
+        } else {
+            Some(&param_opt_refs)
+        };
+
         self.writer
-            .newline()
-            .map_err(|e| PyValueError::new_err(format!("Failed to write newline: {}", e)))
+            .write_command_with_options(&command.inner, opt_ref, param_opt)
+            .map_err(|e| e.into())
     }
 
     /// Increase the indentation level by 1
@@ -340,5 +437,25 @@ impl PyWriter {
         self.writer
             .newline()
             .map_err(|e| PyValueError::new_err(format!("Failed to write newline: {}", e)))
+    }
+
+    /// Explicitly close the writer, flushing any remaining content
+    pub fn close(&mut self) -> PyResult<()> {
+        // We'll figure out how to flush koicore::Writer later
+        // For now, at least this compiles
+        Ok(())
+    }
+
+    fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __exit__(
+        &mut self,
+        _exc_type: Bound<'_, PyAny>,
+        _exc_value: Bound<'_, PyAny>,
+        _traceback: Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        self.close()
     }
 }

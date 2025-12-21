@@ -3,9 +3,13 @@
 //! This module provides clean Python bindings that expose Rust commands
 //! as natural Python objects without unnecessary wrapping.
 
-use pyo3::{ exceptions::PyValueError, prelude::*, types::{ PyDict, PyList, PyTuple } };
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::{PyDict, PyList, PyTuple},
+};
 
-use koicore::command::{ Command, Parameter, Value, CompositeValue };
+use koicore::command::{Command, CompositeValue, Parameter, Value};
 
 /// Convert Python objects to Rust Value types
 fn py_to_rs_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
@@ -15,33 +19,36 @@ fn py_to_rs_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
         Ok(Value::Float(float_val))
     } else if let Ok(string_val) = obj.extract::<String>() {
         Ok(Value::String(string_val))
+    } else if let Ok(bool_val) = obj.extract::<bool>() {
+        Ok(Value::Bool(bool_val))
     } else {
-        Err(
-            PyValueError::new_err(
-                format!("Unsupported type for Value conversion: {}", obj.get_type().name()?)
-            )
-        )
+        Err(PyValueError::new_err(format!(
+            "Unsupported type for Value conversion: {}",
+            obj.get_type().name()?
+        )))
     }
 }
 
 /// Convert Rust Value to Python object
 fn rs_value_to_py<'py>(value: &Value, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     match value {
-        Value::Int(i) =>
-            i
-                .into_pyobject(py)
-                .map_err(Into::into)
-                .map(|i| i.into_any()),
-        Value::Float(f) =>
-            f
-                .into_pyobject(py)
-                .map_err(Into::into)
-                .map(|f| f.into_any()),
-        Value::String(s) =>
-            s
-                .into_pyobject(py)
-                .map_err(Into::into)
-                .map(|s| s.into_any()),
+        Value::Int(i) => Ok(i
+            .into_pyobject(py)
+            .map_err(Into::<PyErr>::into)?
+            .into_any()),
+        Value::Float(f) => Ok(f
+            .into_pyobject(py)
+            .map_err(Into::<PyErr>::into)?
+            .into_any()),
+        Value::String(s) => Ok(s
+            .into_pyobject(py)
+            .map_err(Into::<PyErr>::into)?
+            .into_any()),
+        Value::Bool(b) => Ok(
+            b.into_pyobject(py).map(|b| Bound::clone(&b))
+            .map_err(Into::<PyErr>::into)?
+            .into_any(),
+        ),
     }
 }
 
@@ -55,9 +62,8 @@ fn py_to_rs_composite_value(obj: &Bound<'_, PyAny>) -> PyResult<CompositeValue> 
         }
         Ok(CompositeValue::List(values))
     } else if
-        // Try as dict
-        let Ok(py_dict) = obj.cast::<PyDict>()
-    {
+    // Try as dict
+    let Ok(py_dict) = obj.cast::<PyDict>() {
         let mut items = Vec::new();
         for (key, value) in py_dict {
             let key_str = key.extract::<String>()?;
@@ -74,7 +80,7 @@ fn py_to_rs_composite_value(obj: &Bound<'_, PyAny>) -> PyResult<CompositeValue> 
 /// Convert Rust CompositeValue to Python object
 fn rs_composite_value_to_py<'py>(
     value: &CompositeValue,
-    py: Python<'py>
+    py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     match value {
         CompositeValue::Single(v) => rs_value_to_py(v, py),
@@ -117,7 +123,10 @@ fn rs_parameter_to_py<'py>(param: &Parameter, py: Python<'py>) -> PyResult<Bound
         Parameter::Composite(name, value) => {
             let py_tuple = PyTuple::new(
                 py,
-                &[name.into_pyobject(py)?.into_any(), rs_composite_value_to_py(value, py)?]
+                &[
+                    name.into_pyobject(py)?.into_any(),
+                    rs_composite_value_to_py(value, py)?,
+                ],
             )?;
             Ok(py_tuple.into_any())
         }
@@ -138,7 +147,7 @@ fn rs_parameter_to_py<'py>(param: &Parameter, py: Python<'py>) -> PyResult<Bound
 #[derive(Clone, PartialEq)]
 pub struct PyCommand {
     /// Internal Rust Command instance
-    inner: Command,
+    pub(crate) inner: Command,
 }
 
 #[pymethods]
@@ -235,7 +244,8 @@ impl PyCommand {
     ///     List of all parameters as Python objects (ints, floats, strings, tuples, lists, dicts)
     #[getter]
     pub fn params<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyAny>>> {
-        self.inner.params
+        self.inner
+            .params
             .iter()
             .map(|param| rs_parameter_to_py(param, py))
             .collect()
@@ -265,7 +275,9 @@ impl PyCommand {
         let kwargs_dict = PyDict::new(py);
         for param in &self.inner.params {
             if let Parameter::Composite(name, value) = param {
-                kwargs_dict.set_item(name, rs_composite_value_to_py(value, py)?).unwrap();
+                kwargs_dict
+                    .set_item(name, rs_composite_value_to_py(value, py)?)
+                    .unwrap();
             }
         }
         Ok(kwargs_dict)
@@ -324,9 +336,13 @@ impl PyCommand {
         let params_repr = self
             .params(py)?
             .iter()
-            .map(|param| { param.repr().and_then(|repr| repr.extract::<String>()) })
+            .map(|param| param.repr().and_then(|repr| repr.extract::<String>()))
             .collect::<PyResult<Vec<String>>>()?;
-        Ok(format!("Command('{}', [{}])", self.name(), params_repr.join(", ")))
+        Ok(format!(
+            "Command('{}', [{}])",
+            self.name(),
+            params_repr.join(", ")
+        ))
     }
 
     /// Convert command to string
@@ -340,9 +356,7 @@ impl PyCommand {
 
 impl From<Command> for PyCommand {
     fn from(command: Command) -> Self {
-        Self {
-            inner: command,
-        }
+        Self { inner: command }
     }
 }
 
