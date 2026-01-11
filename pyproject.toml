@@ -8,7 +8,6 @@ description = "Python binding for Koilang"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "pydantic>=2.12.5",
     "typing-extensions>=4.5.0",
 ]
 dynamic = ["version"]
@@ -20,5 +19,6 @@ module-name = "koilang.core"
 [dependency-groups]
 dev = [
     "coverage>=7.13.0",
+    "maturin>=1.11.5",
     "pytest>=9.0.2",
 ]

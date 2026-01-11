@@ -223,7 +223,6 @@ class Parser:
 
         Args:
             path_or_file: Input source, can be:
-                - String containing KoiLang text
                 - File path (str or PathLike)
                 - File-like object with readline() method
             config: Optional parser configuration with keys:
