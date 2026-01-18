@@ -17,22 +17,23 @@ from typing import (
     Union,
     overload,
 )
-from typing_extensions import Literal, Self
 
+from typing_extensions import Literal, Self, deprecated
+
+from koilang.core import KoiParseError
 
 from ..exception import KoiLangError
-from koilang.core import KoiParseError
 from ..lexer import BaseLexer, FileLexer, StringLexer
 from ..parser import Parser
 from .command import Command
 from .commandset import CommandSet, CommandSetMeta
 from .environment import Environment
 
-
 _T_EnvCls = TypeVar("_T_EnvCls", bound=Type[Environment])
 _T_Handler = TypeVar("_T_Handler", bound=Type["AbstractHandler"])
 
 
+@deprecated("kola.klvm.KoiLangMeta is deprecated, use koilang module instead")
 class KoiLangMeta(CommandSetMeta):
     """
     metaclass for KoiLang class

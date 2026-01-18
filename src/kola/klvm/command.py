@@ -1,7 +1,7 @@
 from functools import partialmethod
 from types import MethodType
 from typing import Any, Callable, Dict, Generator, Iterable, Tuple, Union, overload
-from typing_extensions import Self, Protocol, runtime_checkable
+from typing_extensions import Self, Protocol, runtime_checkable, deprecated
 
 
 class CommandCaller(Protocol):
@@ -13,6 +13,7 @@ class CommandLike(Protocol):
     def __kola_command__(self) -> Generator[Tuple[str, Callable], None, None]: ...
 
 
+@deprecated("kola.klvm.Command is deprecated, use koilang module instead")
 class Command(object):
     __slots__ = ["__name__", "__func__", "suppression", "virtual", "alias", "extra_data"]
 

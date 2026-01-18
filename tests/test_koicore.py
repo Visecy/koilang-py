@@ -9,7 +9,7 @@ from typing import IO
 
 import pytest
 
-from koilang import (
+from koilang.core import (
     Command,
     NumberFormat,
     ParamFormatSelector,

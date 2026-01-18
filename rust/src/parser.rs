@@ -3,16 +3,16 @@
 //! This module provides Python bindings for the koicore parser functionality,
 //! allowing Python code to parse KoiLang files and handle parsing operations.
 
-use pyo3::PyClassGuard;
 use pyo3::exceptions::PyValueError;
+use pyo3::PyClassGuard;
 use pyo3::{prelude::*, types::PyString};
-use std::sync::{Arc, Mutex};
 use std::io;
+use std::sync::{Arc, Mutex};
 
 use crate::command::PyCommand;
 use crate::error::raise_parser_err;
-use crate::traceback::add_traceback;
 use crate::io::PyIoWrapper;
+use crate::traceback::add_traceback;
 use koicore::parser::{ErrorInfo, FileInputSource, Parser, ParserConfig, TextInputSource};
 
 /// Configuration structure for parser behavior
@@ -29,14 +29,20 @@ pub struct PyParserConfig {
     pub convert_number_command: bool,
     /// Whether to skip adding Python traceback information to errors (default: false)
     pub skip_add_traceback: bool,
+    /// Whether to preserve empty lines in the output (default: false)
+    pub preserve_empty_lines: bool,
+    /// Whether to preserve indentation in the output (default: false)
+    pub preserve_indent: bool,
 }
 
 impl From<PyParserConfig> for ParserConfig {
     fn from(config: PyParserConfig) -> Self {
         Self {
-            command_threshold: config.command_threshold .unwrap_or(1),
+            command_threshold: config.command_threshold.unwrap_or(1),
             skip_annotations: config.skip_annotations,
             convert_number_command: config.convert_number_command,
+            preserve_empty_lines: config.preserve_empty_lines,
+            preserve_indent: config.preserve_indent,
         }
     }
 }
@@ -44,7 +50,6 @@ impl From<PyParserConfig> for ParserConfig {
 impl TextInputSource for PyIoWrapper {
     fn next_line(&mut self) -> io::Result<Option<String>> {
         Python::attach(|py| {
-            // 调用 readline 并处理异常
             let result = self.call_method0(py, "readline");
 
             match result {
@@ -61,10 +66,7 @@ impl TextInputSource for PyIoWrapper {
                     match is_empty {
                         Ok(true) => return Ok(None),
                         Err(pyerr) => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                pyerr,
-                            ));
+                            return Err(io::Error::new(io::ErrorKind::Other, pyerr));
                         }
                         _ => {}
                     };
@@ -82,11 +84,7 @@ impl TextInputSource for PyIoWrapper {
                     Ok(Some(rust_str))
                 }
                 Err(pyerr) => {
-                    // 返回通用 IO 错误（会被上层忽略）
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        pyerr,
-                    ))
+                    Err(io::Error::new(io::ErrorKind::Other, pyerr))
                 }
             }
         })
@@ -149,7 +147,8 @@ impl PyParser {
         // Check if input is a string (for string-based parsing)
         if let Ok(text) = path_or_file.extract::<String>() {
             let string_source = FileInputSource::new(text)?;
-            let arc_input: Arc<Mutex<dyn TextInputSource + Send>> = Arc::new(Mutex::new(string_source));
+            let arc_input: Arc<Mutex<dyn TextInputSource + Send>> =
+                Arc::new(Mutex::new(string_source));
             let parser = Parser::new(arc_input.clone(), config.clone().into());
             return Ok(Self {
                 config: config,
@@ -162,7 +161,8 @@ impl PyParser {
             let path_str: String = path_obj.call0()?.extract()?;
             match FileInputSource::new(path_str) {
                 Ok(file_source) => {
-                    let arc_input: Arc<Mutex<dyn TextInputSource + Send>> = Arc::new(Mutex::new(file_source));
+                    let arc_input: Arc<Mutex<dyn TextInputSource + Send>> =
+                        Arc::new(Mutex::new(file_source));
                     let parser = Parser::new(arc_input.clone(), config.clone().into());
                     return Ok(Self {
                         config: config,
@@ -203,7 +203,7 @@ impl PyParser {
                 if let ErrorInfo::IoError { error } = parse_error.error_info {
                     return Err(error.into());
                 }
-                
+
                 let err_source = parse_error.source.clone();
                 let mut exc = raise_parser_err(parse_error);
                 if let Some(source) = err_source {
@@ -212,7 +212,7 @@ impl PyParser {
                     }
                 }
                 Err(exc)
-            },
+            }
         }
     }
 
@@ -286,7 +286,13 @@ impl PyParser {
                     let mut exc = raise_parser_err(parse_error);
                     if let Some(source) = err_source {
                         if !self.config.skip_add_traceback {
-                            exc = add_traceback(exc, py, &source.filename, "<koilang>", source.lineno);
+                            exc = add_traceback(
+                                exc,
+                                py,
+                                &source.filename,
+                                "<koilang>",
+                                source.lineno,
+                            );
                         }
                     }
                     return Err(exc);

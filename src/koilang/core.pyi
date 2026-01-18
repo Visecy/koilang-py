@@ -214,7 +214,7 @@ class Parser:
 
     def __init__(
         self,
-        path_or_file: Union[str, PathLike[str], IO[str]],
+        path_or_file: Union[str, PathLike[str], IO[bytes], IO[str]],
         /,
         config: Optional[ParserConfig] = None,
     ) -> None:
@@ -683,7 +683,7 @@ class Writer:
 
     def __init__(
         self,
-        py_file: Union[str, PathLike[str], IO[str]],
+        py_file: Union[str, PathLike[str], IO[bytes]],
         config: Optional[WriterConfig] = None,
     ) -> None:
         """Create a new Writer from a path, PathLike, or Python file-like object.
@@ -768,6 +768,38 @@ class Writer:
 
         Raises:
             ValueError: If writing fails
+        """
+        ...
+    
+    def close(self) -> None:
+        """Close the writer and release resources.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If closing fails
+        """
+        ...
+
+    def __enter__(self) -> Self:
+        """Enter the context manager.
+
+        Returns:
+            The writer instance
+        """
+        ...
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the context manager.
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+
+        Returns:
+            None
         """
         ...
 

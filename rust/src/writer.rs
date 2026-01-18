@@ -14,7 +14,9 @@ use pyo3::{
     types::{PyAny, PyDict, PyType},
 };
 
-use koicore::writer::{FormatterOptions, NumberFormat, ParamFormatSelector, Writer, WriterConfig};
+use koicore::writer::{
+    FloatFormat, FormatterOptions, NumberFormat, ParamFormatSelector, Writer, WriterConfig,
+};
 
 use crate::command::PyCommand;
 use crate::io::PyIoWrapper;
@@ -66,6 +68,24 @@ pub enum PyNumberFormat {
     Binary,
 }
 
+/// Float format options for command parameter formatting
+#[pyclass(name = "FloatFormat", module = "koilang.core.writer", eq, eq_int)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum PyFloatFormat {
+    /// Unset float format (default)
+    #[pyo3(name = "DEFAULT")]
+    Default,
+    /// Decimal format (e.g., 3.14)
+    #[pyo3(name = "DECIMAL")]
+    Decimal,
+    /// Scientific format (e.g., 3.14e0)
+    #[pyo3(name = "SCIENTIFIC")]
+    Scientific,
+    /// General format
+    #[pyo3(name = "GENERAL")]
+    General,
+}
+
 impl From<PyNumberFormat> for NumberFormat {
     fn from(py_format: PyNumberFormat) -> Self {
         match py_format {
@@ -86,6 +106,30 @@ impl From<NumberFormat> for PyNumberFormat {
             NumberFormat::Hex => PyNumberFormat::Hex,
             NumberFormat::Octal => PyNumberFormat::Octal,
             NumberFormat::Binary => PyNumberFormat::Binary,
+            _ => PyNumberFormat::Unknown,
+        }
+    }
+}
+
+impl From<FloatFormat> for PyFloatFormat {
+    fn from(format: FloatFormat) -> Self {
+        match format {
+            FloatFormat::Default => PyFloatFormat::Default,
+            FloatFormat::Fixed(_) => PyFloatFormat::Decimal,
+            FloatFormat::Scientific => PyFloatFormat::Scientific,
+            FloatFormat::General(_) => PyFloatFormat::General,
+            _ => PyFloatFormat::Default,
+        }
+    }
+}
+
+impl From<PyFloatFormat> for FloatFormat {
+    fn from(py_format: PyFloatFormat) -> Self {
+        match py_format {
+            PyFloatFormat::Default => FloatFormat::Default,
+            PyFloatFormat::Decimal => FloatFormat::Fixed(None),
+            PyFloatFormat::Scientific => FloatFormat::Scientific,
+            PyFloatFormat::General => FloatFormat::General(None),
         }
     }
 }
@@ -107,6 +151,32 @@ impl PyNumberFormat {
             2 => *self = PyNumberFormat::Hex,
             3 => *self = PyNumberFormat::Octal,
             4 => *self = PyNumberFormat::Binary,
+            _ => return Err(PyValueError::new_err("Invalid state")),
+        }
+        Ok(())
+    }
+
+    pub fn __deepcopy__(&self, _memo: &Bound<'_, PyDict>) -> Self {
+        *self
+    }
+}
+
+#[pymethods]
+impl PyFloatFormat {
+    pub fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyType>, (u8,))> {
+        Ok((PyFloatFormat::type_object(py), (*self as u8,)))
+    }
+
+    pub fn __getstate__(&self) -> u8 {
+        *self as u8
+    }
+
+    pub fn __setstate__(&mut self, state: u8) -> PyResult<()> {
+        match state {
+            0 => *self = PyFloatFormat::Default,
+            1 => *self = PyFloatFormat::Decimal,
+            2 => *self = PyFloatFormat::Scientific,
+            3 => *self = PyFloatFormat::General,
             _ => return Err(PyValueError::new_err("Invalid state")),
         }
         Ok(())
@@ -229,6 +299,8 @@ pub struct PyFormatterOptions {
     pub newline_before_param: bool,
     /// Whether to add a newline after this specific parameter
     pub newline_after_param: bool,
+    /// Format to use for floating point values
+    pub float_format: PyFloatFormat,
     /// Whether to override the base options completely
     pub should_override: bool,
 }
@@ -245,6 +317,7 @@ impl From<PyFormatterOptions> for FormatterOptions {
             number_format: NumberFormat::from(py_options.number_format),
             newline_before_param: py_options.newline_before_param,
             newline_after_param: py_options.newline_after_param,
+            float_format: FloatFormat::from(py_options.float_format),
             should_override: py_options.should_override,
         }
     }

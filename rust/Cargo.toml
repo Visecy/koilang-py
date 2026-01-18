@@ -1,6 +1,6 @@
 [package]
 name = "core"
-version = "0.1.0"
+version = "2.0.0-alpha.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,5 +9,5 @@ name = "core"
 crate-type = ["cdylib"]
 
 [dependencies]
-koicore = "0.2.1"
+koicore = "0.2.2"
 pyo3 = { version = "0.27.1", features = ["experimental-inspect"] }
