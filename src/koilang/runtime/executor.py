@@ -1,13 +1,15 @@
-from typing import Any, Type, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Type, TypeVar, Union, cast
 
 from ..core import Command
-from .runtime import Runtime
+
+if TYPE_CHECKING:
+    from .runtime import Runtime
 
 T = TypeVar("T")
 
 
 class _EnvProxy:
-    def __init__(self, runtime: Runtime, env: Any) -> None:
+    def __init__(self, runtime: "Runtime", env: Any) -> None:
         self.runtime = runtime
         if env is self:
             raise ValueError("Environment cannot be self")
@@ -29,14 +31,21 @@ class _EnvProxy:
         return wrapper
 
 
-class Executor(Runtime):
+class Executor:
+    def __init__(self, runtime: "Runtime") -> None:
+        self.runtime = runtime
+    
+    @property
+    def env_stack(self) -> list[Any]:
+        return self.runtime.env_stack
+
     def __getattr__(self, name: str) -> Any:
         if name.startswith("do_") or name.startswith("on_"):
             def virtual_command(*args: Any, **kwargs: Any) -> Any:
-                cmd_name = self._get_command_name(name)
+                cmd_name = self.runtime._get_command_name(name)
                 params = _build_params(args, kwargs)
                 cmd = Command(cmd_name, params)
-                return self._dispatch(cmd)
+                return self.runtime._dispatch(cmd)
 
             return virtual_command
         raise AttributeError(f"'Executor' object has no attribute '{name}'")
@@ -57,7 +66,7 @@ class Executor(Runtime):
         # Test says: `executor[TestEnv, 0]` -> first instance.
         # Test says: `executor[TestCommandSet, -1]` -> last instance.
 
-        matches = [e for e in self.env_stack if isinstance(e, env_type)]
+        matches = [e for e in self.runtime.env_stack if isinstance(e, env_type)]
 
         if not matches:
             if index is not None:
@@ -79,7 +88,7 @@ class Executor(Runtime):
                     f"Environment of type {env_type} at index {index} not found"
                 )
 
-        return cast(T, _EnvProxy(self, target_env))
+        return cast(T, _EnvProxy(self.runtime, target_env))
 
 
 def _build_params(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[Any]:

@@ -121,7 +121,7 @@ def test_positional_only() -> None:
 
 
 def test_executor() -> None:
-    executor = Executor(TestCommandSet())
+    executor = Runtime(TestCommandSet()).executor
 
     executor.do_cmd()  # as runtime.execute("#cmd")
     assert len(executor.env_stack) == 1
