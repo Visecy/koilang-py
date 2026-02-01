@@ -83,8 +83,7 @@ class Runtime:
             self._notify_lifecycle("on_end")
             self._parser = None
 
-    @property
-    def executor(self) -> Executor:
+    def get_executor(self) -> Executor:
         return Executor(self)
 
     def _notify_lifecycle(self, method_name: str) -> None:

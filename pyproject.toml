@@ -12,6 +12,9 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[tool.uv]
+package = true
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "koilang.core"

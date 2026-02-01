@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from koilang.core import NumberFormat
 
 
 @dataclass
@@ -10,6 +9,8 @@ class ParserConfig:
     skip_annotations: bool = False
     convert_number_command: bool = True
     skip_add_traceback: bool = False
+    preserve_empty_lines: bool = False
+    preserve_indent: bool = False
 
 
 @dataclass
@@ -22,7 +23,8 @@ class FormatterOptions:
     newline_after: bool = False
     compact: bool = False
     force_quotes_for_vars: bool = False
-    number_format: NumberFormat = field(default_factory=lambda: NumberFormat.UNKNOWN)
+    number_format: str = ""
+    float_format: str = ""
     newline_before_param: bool = False
     newline_after_param: bool = False
     should_override: bool = False

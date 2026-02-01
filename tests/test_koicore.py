@@ -11,7 +11,6 @@ import pytest
 
 from koilang.core import (
     Command,
-    NumberFormat,
     ParamFormatSelector,
     Parser,
     Writer,
@@ -31,7 +30,7 @@ def ktxt_file() -> IO[str]:
 @pytest.fixture
 def commands() -> list[Command]:
     return [
-        Command.new_annotation("## Sample KoiLang file"),
+        Command.new_annotation("Sample KoiLang file"),
         Command.new_text("Hello world!"),
         Command("test", [1, "abc", ("a", 1), 3.14, ("b", [2, "3"]), ("c", {"d": 4})]),
     ]
@@ -107,7 +106,7 @@ def test_writer_explicit_close(tmp_path):
 
 
 def test_write_command_with_options():
-    output = io.BytesIO()
+    output = io.StringIO()
     writer = Writer(output)
 
     cmd = Command("test", [42, "hello"])
@@ -120,7 +119,7 @@ def test_write_command_with_options():
         newline_after=False,
         compact=True,
         force_quotes_for_vars=False,
-        number_format=NumberFormat.HEX,
+        number_format="x",
         newline_before_param=False,
         newline_after_param=False,
         should_override=True,
@@ -129,13 +128,13 @@ def test_write_command_with_options():
     writer.write_command_with_options(cmd, options=options)
     writer.close()
 
-    result = output.getvalue().decode("utf-8")
+    result = output.getvalue()
     # 42 in hex is 0x2a
     assert "#test 0x2a hello" in result
 
 
 def test_write_command_with_param_options():
-    output = io.BytesIO()
+    output = io.StringIO()
     writer = Writer(output)
 
     cmd = Command("test", [42, 255])
@@ -150,7 +149,7 @@ def test_write_command_with_param_options():
             newline_after=False,
             compact=True,
             force_quotes_for_vars=False,
-            number_format=NumberFormat.DECIMAL,
+            number_format="d",
             newline_before_param=False,
             newline_after_param=False,
             should_override=True,
@@ -162,7 +161,7 @@ def test_write_command_with_param_options():
             newline_after=False,
             compact=True,
             force_quotes_for_vars=False,
-            number_format=NumberFormat.HEX,
+            number_format="x",
             newline_before_param=False,
             newline_after_param=False,
             should_override=True,
@@ -172,12 +171,12 @@ def test_write_command_with_param_options():
     writer.write_command_with_options(cmd, param_options=param_options)
     writer.close()
 
-    result = output.getvalue().decode("utf-8")
+    result = output.getvalue()
     assert "#test 42 0xff" in result
 
 
 def test_write_command_with_named_param_options():
-    output = io.BytesIO()
+    output = io.StringIO()
     writer = Writer(output)
 
     # Composite parameter: ("val", 123)
@@ -191,7 +190,7 @@ def test_write_command_with_named_param_options():
             newline_after=False,
             compact=True,
             force_quotes_for_vars=False,
-            number_format=NumberFormat.BINARY,
+            number_format="b",
             newline_before_param=False,
             newline_after_param=False,
             should_override=True,
@@ -201,7 +200,6 @@ def test_write_command_with_named_param_options():
     writer.write_command_with_options(cmd, param_options=param_options)
     writer.close()
 
-    result = output.getvalue().decode("utf-8")
+    result = output.getvalue()
     # 123 in binary is 0b1111011
     assert "val(0b1111011)" in result
-

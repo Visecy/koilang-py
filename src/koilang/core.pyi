@@ -214,7 +214,7 @@ class Parser:
 
     def __init__(
         self,
-        path_or_file: Union[str, PathLike[str], IO[bytes], IO[str]],
+        path_or_file: Union[str, PathLike[str], IO[str]],
         /,
         config: Optional[ParserConfig] = None,
     ) -> None:
@@ -573,38 +573,6 @@ class KoiParserUnexpectedEofError(KoiParseError):
         """
         ...
 
-    def __str__(self) -> str:
-        """Get string representation of the error.
-
-        Returns:
-            The formatted error message
-        """
-        ...
-
-# NumberFormat enum
-class NumberFormat:
-    """Number format options for command parameter formatting.
-
-    This enum defines the different numeric formats that can be used when
-    writing commands to KoiLang files. It controls how numeric values are
-    represented in the output.
-    """
-
-    UNKNOWN: NumberFormat
-    """Unset number format (default) - uses natural representation"""
-
-    DECIMAL: NumberFormat
-    """Decimal format (e.g., 42)"""
-
-    HEX: NumberFormat
-    """Hexadecimal format (e.g., 0x2A)"""
-
-    OCTAL: NumberFormat
-    """Octal format (e.g., 052)"""
-
-    BINARY: NumberFormat
-    """Binary format (e.g., 0b101010)"""
-
 # ParamFormatSelector enum
 class ParamFormatSelector:
     """Selector for parameter format configuration.
@@ -683,7 +651,7 @@ class Writer:
 
     def __init__(
         self,
-        py_file: Union[str, PathLike[str], IO[bytes]],
+        py_file: Union[str, PathLike[str], IO[str]],
         config: Optional[WriterConfig] = None,
     ) -> None:
         """Create a new Writer from a path, PathLike, or Python file-like object.
@@ -770,7 +738,7 @@ class Writer:
             ValueError: If writing fails
         """
         ...
-    
+
     def close(self) -> None:
         """Close the writer and release resources.
 
@@ -813,7 +781,6 @@ __all__ = [
     "KoiParserSyntaxError",
     "KoiParserUnexpectedInputError",
     "KoiParserUnexpectedEofError",
-    "NumberFormat",
     "ParamFormatSelector",
     "Writer",
 ]

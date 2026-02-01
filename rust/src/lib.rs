@@ -1,10 +1,10 @@
 use pyo3::prelude::*;
 
 pub mod command;
-pub mod parser;
-pub mod traceback;
 pub mod error;
 pub mod io;
+pub mod parser;
+pub mod traceback;
 pub mod writer;
 
 /// A Python module implemented in Rust.
@@ -15,13 +15,16 @@ mod core {
 
     #[pymodule_export]
     use super::parser::PyParser;
-    
+
     #[pymodule_export]
-    use super::traceback::{PyTracebackEntry, PyParserLineSource};
-    
+    use super::traceback::{PyParserLineSource, PyTracebackEntry};
+
     #[pymodule_export]
-    use super::error::{KoiParserSyntaxError, KoiParserUnexpectedInputError, KoiParserUnexpectedEofError, PyParseError};
-    
+    use super::error::{
+        KoiParserSyntaxError, KoiParserUnexpectedEofError, KoiParserUnexpectedInputError,
+        PyParseError,
+    };
+
     #[pymodule_export]
-    use super::writer::{PyNumberFormat, PyParamFormatSelector, PyWriter};
+    use super::writer::{PyParamFormatSelector, PyWriter};
 }

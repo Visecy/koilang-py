@@ -121,15 +121,17 @@ def test_positional_only() -> None:
 
 
 def test_executor() -> None:
-    executor = Runtime(TestCommandSet()).executor
+    runtime = Runtime(TestCommandSet())
+    executor = runtime.get_executor()
+    assert runtime is executor.runtime
 
     executor.do_cmd()  # as runtime.execute("#cmd")
-    assert len(executor.env_stack) == 1
-    assert isinstance(executor.env_stack[0], TestCommandSet)
-    assert executor.env_stack[0].cmd_count == 1
+    assert len(runtime.env_stack) == 1
+    assert isinstance(runtime.env_stack[0], TestCommandSet)
+    assert runtime.env_stack[0].cmd_count == 1
 
     executor[TestCommandSet].do_cmd(cnt=2)  # as runtime.execute("#cmd cnt(2)")
-    assert executor.env_stack[0].cmd_count == 3
+    assert runtime.env_stack[0].cmd_count == 3
 
     executor[TestEnv].do_enter()
     # equals to `executor[TestCommandSet].do_enter()`
