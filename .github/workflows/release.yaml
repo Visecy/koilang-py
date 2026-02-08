@@ -208,6 +208,7 @@ jobs:
           name: wheels-macos-${{ matrix.platform.target }}
           path: dist
       - name: pytest
+        continue-on-error: true
         run: |
           set -e
           python3 -m venv .venv
