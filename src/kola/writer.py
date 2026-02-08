@@ -1,7 +1,7 @@
 import os
 import io
 from types import TracebackType
-from typing import Any, Type, Union, Optional
+from typing import Any, Type, Union, Optional, IO
 from typing_extensions import Protocol, runtime_checkable, Self
 
 from koilang.core import Writer as CoreWriter, Command as CoreCommand
@@ -25,7 +25,7 @@ class BaseWriter(object):
         self._io: Optional[io.IOBase] = None
         self._closed = False
 
-    def _init_writer(self, py_file: Union[str, os.PathLike, io.IOBase]):
+    def _init_writer(self, py_file: Union[str, os.PathLike[str], IO[str]]):
         config = WriterConfig(
             global_options=FormatterOptions(indent=self._indent_val),
             command_threshold=self._command_threshold,
@@ -142,17 +142,16 @@ class FileWriter(BaseWriter):
         super().__init__(indent, command_threshold)
         self.path = __path
         self.encoding = encoding
-        # CoreWriter works best with binary file objects from Python
-        self._io = open(__path, "wb")
+        # CoreWriter works with string-based IO
+        self._io = open(__path, "w", encoding=encoding)
         self._init_writer(self._io)
 
 
 class StringWriter(BaseWriter):
     def __init__(self, indent: int = 4, command_threshold: int = 1) -> None:
         super().__init__(indent, command_threshold)
-        self._buffer = io.BytesIO()
+        self._buffer = io.StringIO()
         self._init_writer(self._buffer)
 
     def getvalue(self) -> str:
-        # CoreWriter doesn't have a flush() method, it writes directly to IO
-        return self._buffer.getvalue().decode("utf-8")
+        return self._buffer.getvalue()

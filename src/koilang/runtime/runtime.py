@@ -1,3 +1,4 @@
+import os
 from typing import (
     IO,
     Any,
@@ -6,29 +7,39 @@ from typing import (
     Optional,
     Union,
 )
+from os import PathLike
 
 from ..core import Command, Parser
+from ..model import ParserConfig, WriterConfig
 from .context import wrap_handler
 from .executor import Executor
+from .writer import Writer
+from .exception import KoiRuntimeCommandNotFoundError, JumpRequest, KoiRuntimeError
 
 
-Middleware = Callable[["Runtime", Command, Callable[[], Any]], Any]
-
-
-class _JumpRequest(Exception):
-    """Internal exception used to signal a jump request."""
-
-    def __init__(self, position: int) -> None:
-        self.position = position
-        super().__init__(f"Jump to position {position}")
+Middleware = Callable[["Runtime", Command, Callable[[Command], Any]], Any]
 
 
 class Runtime:
+    """The central orchestration layer for KoiLang execution.
+
+    The Runtime handles the execution loop, environment stack management,
+    middleware dispatching, and advanced control flow features like command
+    caching and jumps.
+
+    Args:
+        middleware: An optional list of Middleware functions to wrap command execution.
+        config: Optional ParserConfig for customizing the underlying parser.
+    """
+
     def __init__(
-        self, root_env: Any, middleware: Optional[List[Middleware]] = None
+        self,
+        middleware: Optional[List[Middleware]] = None,
+        config: Optional[ParserConfig] = None,
     ) -> None:
-        self.env_stack: List[Any] = [root_env]
+        self.env_stack: List[Any] = []
         self.middleware: List[Middleware] = middleware or []
+        self.parser_config: Optional[ParserConfig] = config
         self._current_command: Optional[Command] = None
 
         # Cache-related attributes
@@ -39,17 +50,38 @@ class Runtime:
         self._parser: Optional[Parser] = None
 
     def env_enter(self, env: Any) -> None:
+        """Push a new environment onto the stack.
+
+        Subsequent commands will look for 'do_<name>' or 'on_<name>' methods
+        starting from the top-most environment.
+
+        Args:
+            env: Any Python object with command handler methods.
+        """
         self.env_stack.append(env)
 
     def env_exit(self, env: Any) -> None:
+        """Pop the specified environment from the stack.
+
+        Args:
+            env: The environment object to remove. Must be at the top of the stack.
+
+        Raises:
+            ValueError: If the environment to exit is not at the top of the stack.
+        """
         if self.env_stack[-1] is not env:
             raise ValueError("Environment mismatch during exit")
         self.env_stack.pop()
 
-    def execute(self, source: Union[str, IO[str]]) -> None:
+    def execute(self, source: Union[str, os.PathLike[str], IO[str]]) -> None:
+        """Start execution of KoiLang content from a source.
+
+        Args:
+            source: A filename (str) or a file-like object (IO[str]).
+        """
         self._notify_lifecycle("on_start")
         try:
-            parser = Parser(source)
+            parser = Parser(source, config=self.parser_config)
             self._parser = parser
             self._current_position = -1
 
@@ -57,9 +89,7 @@ class Runtime:
                 self._current_position += 1
 
                 # Fetch command
-                if self._cache_enabled and self._current_position < len(
-                    self._command_cache
-                ):
+                if self._cache_enabled and self._current_position < len(self._command_cache):
                     # From cache
                     cmd = self._command_cache[self._current_position]
                 else:
@@ -75,7 +105,9 @@ class Runtime:
 
                 try:
                     self._dispatch(cmd)
-                except _JumpRequest as jump:
+                except JumpRequest as jump:
+                    if jump.runtime is not self:
+                        raise KoiRuntimeError("Jump request from another runtime", runtime=jump.runtime) from None
                     # Handle jump by setting position
                     # The loop will increment it, so we set it to target - 1
                     self._current_position = jump.position - 1
@@ -84,7 +116,31 @@ class Runtime:
             self._parser = None
 
     def get_executor(self) -> Executor:
+        """Create an Executor instance tied to this runtime.
+
+        The Executor provides a programmatic way to trigger commands within the
+        current runtime state.
+        """
         return Executor(self)
+
+    def get_writer(
+        self,
+        target: Union[str, PathLike[str], IO[str]],
+        config: Optional["WriterConfig"] = None,
+    ) -> Writer:
+        """Create a Writer instance.
+
+        If config is not provided, it creates a default one and inherits
+        command_threshold from this runtime's parser_config.
+        """
+        from ..model import WriterConfig
+
+        if config is None:
+            config = WriterConfig()
+            if self.parser_config:
+                config.command_threshold = self.parser_config.command_threshold
+
+        return Writer(target, config)
 
     def _notify_lifecycle(self, method_name: str) -> None:
         for env in self.env_stack:
@@ -97,14 +153,12 @@ class Runtime:
             return self._execute_command(cmd)
 
         # Build the middleware chain using direct iteration
-        def execute_with_middleware(index: int) -> Any:
+        def execute_with_middleware(index: int, current_cmd: Command) -> Any:
             if index >= len(self.middleware):
-                return self._execute_command(cmd)
-            return self.middleware[index](
-                self, cmd, lambda: execute_with_middleware(index + 1)
-            )
+                return self._execute_command(current_cmd)
+            return self.middleware[index](self, current_cmd, lambda c: execute_with_middleware(index + 1, c))
 
-        return execute_with_middleware(0)
+        return execute_with_middleware(0, cmd)
 
     def _get_method_name(self, cmd_name: str) -> str:
         if cmd_name.startswith("@"):
@@ -131,8 +185,8 @@ class Runtime:
             for env in reversed(self.env_stack):
                 if hasattr(env, method_name):
                     return self._execute_on_env(env, method_name, cmd)
-
-            return None
+            else:
+                raise KoiRuntimeCommandNotFoundError(f"Command '{cmd.name}' not found", runtime=self)
         finally:
             self._current_command = None
 
@@ -171,9 +225,7 @@ class Runtime:
         if label in self._label_index:
             if self._label_index[label] == pos:
                 return
-            raise ValueError(
-                f"Label '{label}' already registered at position {self._label_index[label]}"
-            )
+            raise ValueError(f"Label '{label}' already registered at position {self._label_index[label]}")
 
         self._label_index[label] = pos
 
@@ -194,7 +246,7 @@ class Runtime:
             raise ValueError(f"Position {position} not available")
 
         # Raise exception to signal jump
-        raise _JumpRequest(position)
+        raise JumpRequest(position, runtime=self)
 
     def jump_to_label(
         self,
@@ -229,9 +281,7 @@ class Runtime:
 
         self.jump_to_position(self._label_index[label])
 
-    def scan_and_jump(
-        self, strategy: Callable[[Command, int], bool], offset: int = 0
-    ) -> None:
+    def scan_and_jump(self, strategy: Callable[[Command, int], bool], offset: int = 0) -> None:
         """Scan ahead from current position and jump to the first command that matches the strategy.
 
         An optional offset can be applied to the target position (e.g. 1 to jump after the match).

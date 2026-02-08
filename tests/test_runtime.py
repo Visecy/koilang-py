@@ -36,7 +36,8 @@ class TestCommandSet:
 
 
 def test_runtime() -> None:
-    runtime = Runtime(TestCommandSet())
+    runtime = Runtime()
+    runtime.env_enter(TestCommandSet())
 
     txt = "#cmd"
     runtime.execute(io.StringIO(txt))
@@ -53,7 +54,8 @@ def test_runtime() -> None:
 
 
 def test_runtime_env() -> None:
-    runtime = Runtime(TestCommandSet())
+    runtime = Runtime()
+    runtime.env_enter(TestCommandSet())
 
     runtime.execute(io.StringIO("#cmd\n#enter\n#cmd\n"))
     assert len(runtime.env_stack) == 2
@@ -72,29 +74,46 @@ def test_runtime_env() -> None:
 def test_middleware() -> None:
     log = []
 
-    def logger_middleware(
-        runtime: Runtime, cmd: Command, next_handler: Callable[[], Any]
-    ) -> Any:
+    def logger_middleware(runtime: Runtime, cmd: Command, next_handler: Callable[[Command], Any]) -> Any:
         log.append(f"before {cmd.name}")
-        ret = next_handler()
+        ret = next_handler(cmd)
         log.append(f"after {cmd.name}")
         return ret
 
-    def modifier_middleware(
-        runtime: Runtime, cmd: Command, next_handler: Callable[[], Any]
-    ) -> Any:
+    def modifier_middleware(runtime: Runtime, cmd: Command, next_handler: Callable[[Command], Any]) -> Any:
         if cmd.name == "cmd":
-            # Modify args if list is mutable? or just check.
-            # core.Command args are properties, usually we'd modify params logic or similar
+            # Modify args or replace command
             pass
-        return next_handler()
+        return next_handler(cmd)
 
-    runtime = Runtime(
-        TestCommandSet(), middleware=[logger_middleware, modifier_middleware]
-    )
+    runtime = Runtime(middleware=[logger_middleware, modifier_middleware])
+    runtime.env_enter(TestCommandSet())
     runtime.execute(io.StringIO("#cmd\n"))
 
     assert log == ["before cmd", "after cmd"]
+
+
+def test_middleware_modify_command() -> None:
+    log = []
+
+    def modifier_middleware(runtime: Runtime, cmd: Command, next_handler: Callable[[Command], Any]) -> Any:
+        if cmd.name == "cmd":
+            new_cmd = Command(name="other", params=cmd.params)
+            return next_handler(new_cmd)
+        return next_handler(cmd)
+
+    class TestEnv:
+        def do_cmd(self) -> None:
+            log.append("cmd")
+
+        def do_other(self) -> None:
+            log.append("other")
+
+    runtime = Runtime(middleware=[modifier_middleware])
+    runtime.env_enter(TestEnv())
+    runtime.execute(io.StringIO("#cmd"))
+
+    assert log == ["other"]
 
 
 def test_dependency_command() -> None:
@@ -103,7 +122,8 @@ def test_dependency_command() -> None:
             self.last_cmd_name = current_command().name
 
     env = CmdEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.execute(io.StringIO("#check"))
     runtime.execute(io.StringIO("#check"))
     assert env.last_cmd_name == "check"
@@ -115,13 +135,15 @@ def test_positional_only() -> None:
             self.res = (x, y)
 
     env = PosEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.execute(io.StringIO("#p 1 2"))
     assert env.res == (1, 2)
 
 
 def test_executor() -> None:
-    runtime = Runtime(TestCommandSet())
+    runtime = Runtime()
+    runtime.env_enter(TestCommandSet())
     executor = runtime.get_executor()
     assert runtime is executor.runtime
 

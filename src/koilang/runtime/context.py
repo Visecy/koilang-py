@@ -12,6 +12,11 @@ command_ctx = ContextVar[Optional[Command]]("command")
 
 
 def current_runtime() -> "Runtime":
+    """Retrieve the currently active Runtime in the current execution context.
+
+    Raises:
+        RuntimeError: If called outside of a command execution handler.
+    """
     runtime = runtime_ctx.get()
     if runtime is None:
         raise RuntimeError("No runtime found")
@@ -19,6 +24,11 @@ def current_runtime() -> "Runtime":
 
 
 def current_command() -> Command:
+    """Retrieve the currently executing Command in the current context.
+
+    Raises:
+        RuntimeError: If called outside of a command execution handler.
+    """
     command = command_ctx.get()
     if command is None:
         raise RuntimeError("No command found")
@@ -36,13 +46,16 @@ def env_exit(env: Any) -> None:
 
 
 def enable_cache() -> None:
-    """Enable command caching in the current runtime."""
+    """Enable command caching in the current runtime.
+
+    Caching is required for advanced control flow like labels and jumps.
+    """
     runtime = current_runtime()
     runtime.enable_cache()
 
 
 def disable_cache() -> None:
-    """Disable command caching in the current runtime."""
+    """Disable command caching and clear cached data in the current runtime."""
     runtime = current_runtime()
     runtime.disable_cache()
 

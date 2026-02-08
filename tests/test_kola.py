@@ -151,7 +151,7 @@ class TestKoiLang(TestCase):
                 200,
                 "text: # This is a text",
                 "text: This is a text, too",
-                "annotation: ### This is an annotation",
+                "annotation: This is an annotation",
             ],
         )
         self.assertEqual(vmobj.errors, [None])
@@ -171,7 +171,7 @@ class TestKoiLang(TestCase):
             wr.text("Hello")
             wr.annotation("?")
         ret = list(KolaTest().parse_file(path, with_ret=True))
-        self.assertEqual(ret, [120, "text: Hello", "annotation: ### ?"])
+        self.assertEqual(ret, [120, "text: Hello", "annotation: ?"])
 
     def test_writer2(self) -> None:
         with EnvTest.writer() as wr:

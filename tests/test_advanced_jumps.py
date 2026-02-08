@@ -14,7 +14,7 @@ class LoopEnv:
     def __init__(self, count: int, start_pos: int) -> None:
         self.count = count
         self.start_pos = start_pos
-    
+
     @classmethod
     def do_repeat(cls, count: int) -> None:
         from koilang.runtime import env_enter, get_current_position
@@ -81,7 +81,8 @@ class AdvancedEnv:
 
 def test_forward_label_jump() -> None:
     env = AdvancedEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
 
     source = """
@@ -96,7 +97,8 @@ def test_forward_label_jump() -> None:
 
 def test_nested_blocks() -> None:
     env = AdvancedEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
 
     source = """
@@ -134,7 +136,8 @@ def test_generic_scan_jump() -> None:
             self.executed.append("end")
 
     env = MagicEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
 
     source = """
@@ -150,7 +153,8 @@ def test_generic_scan_jump() -> None:
 
 def test_nested_loops_and_ifs() -> None:
     env = AdvancedEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
 
     source = """
@@ -173,7 +177,8 @@ def test_nested_loops_and_ifs() -> None:
 
 def test_complex_interop() -> None:
     env = AdvancedEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
 
     # Mix forward goto inside loop with if blocks
@@ -206,7 +211,8 @@ def test_multiple_label_probe() -> None:
 #label end
 #cmd finished
 """
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
     runtime.enable_cache()
     runtime.execute(io.StringIO(source_with_probe.strip()))
 

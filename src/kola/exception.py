@@ -1,6 +1,3 @@
-#
-
-
 class KoiLangError(Exception):
     """
     Base exception for marktext compiler

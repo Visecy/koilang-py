@@ -40,7 +40,8 @@ class CacheTestEnv:
 
 def test_cache_enable_disable() -> None:
     """Test cache state management."""
-    runtime = Runtime(CacheTestEnv())
+    runtime = Runtime()
+    runtime.env_enter(CacheTestEnv())
 
     # Cache should be disabled by default
     assert not runtime.is_cache_enabled()
@@ -57,7 +58,8 @@ def test_cache_enable_disable() -> None:
 def test_cache_stores_commands() -> None:
     """Verify commands are cached when cache is enabled."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n#cmd c\n"))
@@ -72,7 +74,8 @@ def test_cache_stores_commands() -> None:
 def test_cache_cleared_on_disable() -> None:
     """Verify cleanup when cache is disabled."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n"))
@@ -90,7 +93,8 @@ def test_cache_cleared_on_disable() -> None:
 def test_jump_to_position() -> None:
     """Test position-based jumps."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     # Jump forward to skip cmd b
@@ -126,7 +130,8 @@ def test_jump_to_label() -> None:
                 jump_to_label(label)
 
     env = LoopEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(
@@ -147,7 +152,8 @@ def test_jump_to_label() -> None:
 def test_forward_jump_fills_cache() -> None:
     """Verify streaming behavior - forward jumps fill cache."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
 
@@ -181,7 +187,8 @@ def test_backward_jump() -> None:
                 jump_to_position(pos)
 
     env = LoopEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n#jump 0\n#cmd c\n"))
@@ -195,7 +202,8 @@ def test_backward_jump() -> None:
 def test_jump_without_cache_fails() -> None:
     """Error handling - jumps require cache to be enabled."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     # Cache not enabled, should raise error
     with pytest.raises(RuntimeError, match="Cache must be enabled"):
@@ -205,7 +213,8 @@ def test_jump_without_cache_fails() -> None:
 def test_label_registration() -> None:
     """Test explicit label registration API."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#label start\n#cmd b\n"))
@@ -218,7 +227,8 @@ def test_label_registration() -> None:
 def test_label_duplicate_fails() -> None:
     """Test that duplicate labels raise an error."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
 
@@ -229,7 +239,8 @@ def test_label_duplicate_fails() -> None:
 def test_get_current_position() -> None:
     """Test position tracking."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n#cmd c\n"))
@@ -242,7 +253,8 @@ def test_get_current_position() -> None:
 def test_cache_continuity() -> None:
     """Verify no gaps in cache."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n#cmd c\n"))
@@ -256,7 +268,8 @@ def test_cache_continuity() -> None:
 def test_position_without_cache_fails() -> None:
     """Test that getting position requires cache."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     with pytest.raises(RuntimeError, match="Cache must be enabled"):
         runtime.get_current_position()
@@ -265,7 +278,8 @@ def test_position_without_cache_fails() -> None:
 def test_register_label_without_cache_fails() -> None:
     """Test that registering labels requires cache."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     with pytest.raises(RuntimeError, match="Cache must be enabled"):
         runtime.register_label("test")
@@ -274,7 +288,8 @@ def test_register_label_without_cache_fails() -> None:
 def test_jump_beyond_available_commands() -> None:
     """Test jumping beyond available commands."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     runtime.enable_cache()
 
@@ -301,7 +316,8 @@ def test_dynamic_cache_switching() -> None:
             disable_cache()
 
     env = DynamicEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     source = """
 #cmd 1
@@ -329,7 +345,8 @@ def test_dynamic_cache_switching() -> None:
 def test_cache_disabled_by_default() -> None:
     """Test that cache is disabled by default and execution works normally."""
     env = CacheTestEnv()
-    runtime = Runtime(env)
+    runtime = Runtime()
+    runtime.env_enter(env)
 
     # Execute without cache
     runtime.execute(io.StringIO("#cmd a\n#cmd b\n#cmd c\n"))

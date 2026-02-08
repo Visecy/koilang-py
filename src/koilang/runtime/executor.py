@@ -32,15 +32,27 @@ class _EnvProxy:
 
 
 class Executor:
+    """A programmatic interface for executing commands in a Runtime.
+
+    The Executor allows you to call commands as if they were Python methods.
+    It supports both global command dispatching and targeted environment execution.
+
+    Example:
+        >>> executor = runtime.get_executor()
+        >>> executor.do_background("Forest")  # Dispatches #background Forest
+        >>> executor[MyEnv].do_action("jump") # Specifically calls MyEnv.do_action
+    """
+
     def __init__(self, runtime: "Runtime") -> None:
         self.runtime = runtime
-    
+
     @property
     def env_stack(self) -> list[Any]:
         return self.runtime.env_stack
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("do_") or name.startswith("on_"):
+
             def virtual_command(*args: Any, **kwargs: Any) -> Any:
                 cmd_name = self.runtime._get_command_name(name)
                 params = _build_params(args, kwargs)
