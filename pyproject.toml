@@ -21,6 +21,8 @@ package = true
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "koilang.core"
+python-source = "src"
+python-packages = ["koilang", "kola"]
 
 [dependency-groups]
 dev = [
