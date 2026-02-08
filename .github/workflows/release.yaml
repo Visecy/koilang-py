@@ -3,7 +3,7 @@
 #
 #    maturin generate-ci github --pytest
 #
-name: CI
+name: release
 
 on:
   push:
@@ -60,7 +60,8 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/bin/activate
-          pip install koilang --find-links dist --force-reinstall
+          pip install koilang --no-index --find-links dist --no-deps --force-reinstall
+          pip install koilang
           pip install pytest
           pytest
       - name: pytest
@@ -76,7 +77,8 @@ jobs:
             pip3 install -U pip pytest
           run: |
             set -e
-            pip3 install koilang --find-links dist --force-reinstall
+            pip3 install koilang --no-index --find-links dist --no-deps --force-reinstall
+            pip3 install koilang
             pytest
 
   musllinux:
@@ -120,7 +122,8 @@ jobs:
             apk add py3-pip py3-virtualenv
             python3 -m virtualenv .venv
             source .venv/bin/activate
-            pip install koilang --no-index --find-links dist --force-reinstall
+            pip install koilang --no-index --find-links dist --no-deps --force-reinstall
+            pip install koilang
             pip install pytest
             pytest
       - name: pytest
@@ -137,7 +140,8 @@ jobs:
             python3 -m virtualenv .venv
             source .venv/bin/activate
             pip install pytest
-            pip install koilang --find-links dist --force-reinstall
+            pip install koilang --no-index --find-links dist --no-deps --force-reinstall
+            pip install koilang
             pytest
 
   windows:
@@ -173,7 +177,8 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/Scripts/activate
-          pip install koilang --find-links dist --force-reinstall
+          pip install koilang --no-index --find-links dist --no-deps --force-reinstall
+          pip install koilang
           pip install pytest
           pytest
 
@@ -207,7 +212,8 @@ jobs:
           set -e
           python3 -m venv .venv
           source .venv/bin/activate
-          pip install koilang --find-links dist --force-reinstall
+          pip install koilang --no-index --find-links dist --no-deps --force-reinstall
+          pip install koilang
           pip install pytest
           pytest
 
