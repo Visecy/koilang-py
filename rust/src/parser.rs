@@ -7,13 +7,33 @@ use pyo3::exceptions::PyValueError;
 use pyo3::PyClassGuard;
 use pyo3::{prelude::*, types::PyString};
 use std::io;
-use std::sync::{Arc, Mutex};
 
 use crate::command::PyCommand;
 use crate::error::raise_parser_err;
 use crate::io::PyIoWrapper;
 use crate::traceback::add_traceback;
 use koicore::parser::{ErrorInfo, FileInputSource, Parser, ParserConfig, TextInputSource};
+
+enum InputSource {
+    File(FileInputSource),
+    PyIo(PyIoWrapper),
+}
+
+impl TextInputSource for InputSource {
+    fn next_line(&mut self) -> io::Result<Option<String>> {
+        match self {
+            InputSource::File(source) => source.next_line(),
+            InputSource::PyIo(source) => source.next_line(),
+        }
+    }
+
+    fn source_name(&self) -> String {
+        match self {
+            InputSource::File(source) => source.source_name(),
+            InputSource::PyIo(source) => source.source_name(),
+        }
+    }
+}
 
 /// Configuration structure for parser behavior
 ///
@@ -114,7 +134,7 @@ pub struct PyParser {
     /// Parser configuration options
     config: PyParserConfig,
     /// Internal Rust parser instance
-    inner: Parser<Arc<Mutex<dyn TextInputSource + Send>>>,
+    inner: Parser<InputSource>,
 }
 
 #[pymethods]
@@ -141,29 +161,24 @@ impl PyParser {
     #[new]
     #[pyo3(signature = (path_or_file, /, config = None))]
     pub fn new(path_or_file: Bound<'_, PyAny>, config: Option<PyParserConfig>) -> PyResult<Self> {
-        // Parse configuration if provided
         let config = config.unwrap_or_default();
 
-        // Check if input is a string (for string-based parsing)
         if let Ok(text) = path_or_file.extract::<String>() {
             let string_source = FileInputSource::new(text)?;
-            let arc_input: Arc<Mutex<dyn TextInputSource + Send>> =
-                Arc::new(Mutex::new(string_source));
-            let parser = Parser::new(arc_input.clone(), config.clone().into());
+            let input = InputSource::File(string_source);
+            let parser = Parser::new(input, config.clone().into());
             return Ok(Self {
                 config: config,
                 inner: parser,
             });
         }
 
-        // Check if input is a path-like object (has __fspath__ or is str path)
         if let Ok(path_obj) = path_or_file.getattr("__fspath__") {
             let path_str: String = path_obj.call0()?.extract()?;
             match FileInputSource::new(path_str) {
                 Ok(file_source) => {
-                    let arc_input: Arc<Mutex<dyn TextInputSource + Send>> =
-                        Arc::new(Mutex::new(file_source));
-                    let parser = Parser::new(arc_input.clone(), config.clone().into());
+                    let input = InputSource::File(file_source);
+                    let parser = Parser::new(input, config.clone().into());
                     return Ok(Self {
                         config: config,
                         inner: parser,
@@ -178,8 +193,8 @@ impl PyParser {
             }
         }
         let py_io_wrapper = PyIoWrapper::new(path_or_file)?;
-        let arc_input: Arc<Mutex<dyn TextInputSource + Send>> = Arc::new(Mutex::new(py_io_wrapper));
-        let parser = Parser::new(arc_input.clone(), config.clone().into());
+        let input = InputSource::PyIo(py_io_wrapper);
+        let parser = Parser::new(input, config.clone().into());
         Ok(Self {
             config: config,
             inner: parser,

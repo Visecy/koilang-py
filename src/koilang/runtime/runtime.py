@@ -7,8 +7,8 @@ from typing import (
     Optional,
     Union,
 )
-from os import PathLike
 
+from ..types import StrPathLike
 from ..core import Command, Parser
 from ..model import ParserConfig, WriterConfig
 from .context import wrap_handler
@@ -73,7 +73,7 @@ class Runtime:
             raise ValueError("Environment mismatch during exit")
         self.env_stack.pop()
 
-    def execute(self, source: Union[str, os.PathLike[str], IO[str]]) -> None:
+    def execute(self, source: Union[StrPathLike, IO[str]]) -> None:
         """Start execution of KoiLang content from a source.
 
         Args:
@@ -125,7 +125,7 @@ class Runtime:
 
     def get_writer(
         self,
-        target: Union[str, PathLike[str], IO[str]],
+        target: Union[StrPathLike, IO[str]],
         config: Optional["WriterConfig"] = None,
     ) -> Writer:
         """Create a Writer instance.

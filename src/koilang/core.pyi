@@ -9,12 +9,11 @@ represent structured content. This module allows Python programs to parse,
 manipulate, and generate KoiLang content.
 """
 
-from os import PathLike
 from typing import IO, Any, Callable, Optional, Union
 
 from typing_extensions import Self
 
-from .types import ParameterType
+from .types import ParameterType, StrPathLike
 from .model import FormatterOptions, ParserConfig, WriterConfig
 
 class Command:
@@ -214,7 +213,7 @@ class Parser:
 
     def __init__(
         self,
-        path_or_file: Union[str, PathLike[str], IO[str]],
+        path_or_file: Union[StrPathLike, IO[str]],
         /,
         config: Optional[ParserConfig] = None,
     ) -> None:
@@ -223,7 +222,7 @@ class Parser:
 
         Args:
             path_or_file: Input source, can be:
-                - File path (str or PathLike)
+                - File path (str or PathLike[str])
                 - File-like object with readline() method
             config: Optional parser configuration with keys:
                 - command_threshold: int (default: 1) - minimum # for commands
@@ -651,7 +650,7 @@ class Writer:
 
     def __init__(
         self,
-        py_file: Union[str, PathLike[str], IO[str]],
+        py_file: Union[StrPathLike, IO[str]],
         config: Optional[WriterConfig] = None,
     ) -> None:
         """Create a new Writer from a path, PathLike, or Python file-like object.

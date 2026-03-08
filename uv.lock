@@ -138,19 +138,30 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 
+[package.optional-dependencies]
+interactive = [
+    { name = "prompt-toolkit" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "koilang", extra = ["interactive"] },
     { name = "maturin" },
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "typing-extensions", specifier = ">=4.5.0" }]
+requires-dist = [
+    { name = "prompt-toolkit", marker = "extra == 'interactive'", specifier = ">=3.0.0" },
+    { name = "typing-extensions", specifier = ">=4.5.0" },
+]
+provides-extras = ["interactive"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=7.13.0" },
+    { name = "koilang", extras = ["interactive"] },
     { name = "maturin", specifier = ">=1.11.5" },
     { name = "pytest", specifier = ">=9.0.2" },
 ]
@@ -195,6 +206,18 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746" },
+]
+
+[[package]]
+name = "prompt-toolkit"
+version = "3.0.52"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "wcwidth" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/a1/96/06e01a7b38dce6fe1db213e061a4602dd6032a8a97ef6c1a862537732421/prompt_toolkit-3.0.52.tar.gz", hash = "sha256:28cde192929c8e7321de85de1ddbe736f1375148b02f2e17edd840042b1be855" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/84/03/0d3ce49e2505ae70cf43bc5bb3033955d2fc9f932163e84dc0779cc47f48/prompt_toolkit-3.0.52-py3-none-any.whl", hash = "sha256:9aac639a3bbd33284347de5ad8d68ecc044b91a762dc39b7c21095fcd6a19955" },
 ]
 
 [[package]]
@@ -285,4 +308,13 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548" },
+]
+
+[[package]]
+name = "wcwidth"
+version = "0.6.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/35/a2/8e3becb46433538a38726c948d3399905a4c7cabd0df578ede5dc51f0ec2/wcwidth-0.6.0.tar.gz", hash = "sha256:cdc4e4262d6ef9a1a57e018384cbeb1208d8abbc64176027e2c2455c81313159" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/68/5a/199c59e0a824a3db2b89c5d2dade7ab5f9624dbf6448dc291b46d5ec94d3/wcwidth-0.6.0-py3-none-any.whl", hash = "sha256:1a3a1e510b553315f8e146c54764f4fb6264ffad731b3d78088cdb1478ffbdad" },
 ]

@@ -1,7 +1,7 @@
 from typing import Any, IO, List, Optional, Set, Union, TYPE_CHECKING
-from os import PathLike
 from contextlib import contextmanager
 
+from ..types import StrPathLike
 from ..core import Command, Writer as CoreWriter
 from ..model import FormatterOptions, WriterConfig
 
@@ -70,7 +70,7 @@ class Writer:
 
     def __init__(
         self,
-        target: Union[str, PathLike[str], IO[str]],
+        target: Union[StrPathLike, IO[str]],
         config: Optional[WriterConfig] = None,
     ) -> None:
         self._core_writer = CoreWriter(target, config)
