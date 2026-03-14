@@ -33,7 +33,7 @@ class CacheTestEnv:
     def do_jump(self, pos: int) -> None:
         jump_to_position(pos)
 
-    def on_start(self) -> None:
+    def at_start(self) -> None:
         self.executed_commands.clear()
         self.positions.clear()
 

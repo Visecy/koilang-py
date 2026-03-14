@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import (
     IO,
     Any,
@@ -6,7 +7,10 @@ from typing import (
     List,
     Optional,
     Union,
+    Generator,
 )
+
+import contextlib
 
 from ..types import StrPathLike
 from ..core import Command, Parser
@@ -48,19 +52,24 @@ class Runtime:
         self._label_index: dict[str, int] = {}
         self._current_position: int = -1
         self._parser: Optional[Parser] = None
+        self._execution_notify_lock = threading.Lock()
+        self._lifecycle_depth: int = 0
 
     def env_enter(self, env: Any) -> None:
         """Push a new environment onto the stack.
 
-        Subsequent commands will look for 'do_<name>' or 'on_<name>' methods
+        Subsequent commands will look for 'do_<name>' or 'at_<name>' methods
         starting from the top-most environment.
 
         Args:
             env: Any Python object with command handler methods.
         """
         self.env_stack.append(env)
+        with self._execution_notify_lock:
+            if self._lifecycle_depth > 0:
+                self._notify_lifecycle("@start", env)
 
-    def env_exit(self, env: Any) -> None:
+    def env_exit(self, env: Any = None, recursive: bool = False) -> None:
         """Pop the specified environment from the stack.
 
         Args:
@@ -69,9 +78,49 @@ class Runtime:
         Raises:
             ValueError: If the environment to exit is not at the top of the stack.
         """
-        if self.env_stack[-1] is not env:
+        if recursive:
+            if env is None:
+                raise ValueError("Recursive exit requires an environment")
+            depth = 0
+            for e in reversed(self.env_stack):
+                if e is env:
+                    break
+                depth += 1
+            for _ in range(depth):
+                e_to_pop = self.env_stack[-1]
+                with self._execution_notify_lock:
+                    if self._lifecycle_depth > 0:
+                        self._notify_lifecycle("@end", e_to_pop)
+                self.env_stack.pop()
+        elif env is not None and self.env_stack[-1] is not env:
             raise ValueError("Environment mismatch during exit")
-        self.env_stack.pop()
+        else:
+            e_to_pop = self.env_stack[-1]
+            with self._execution_notify_lock:
+                if self._lifecycle_depth > 0:
+                    self._notify_lifecycle("@end", e_to_pop)
+            self.env_stack.pop()
+
+    @contextlib.contextmanager
+    def run_session(self) -> Generator[None, None, None]:
+        """A context manager to group multiple executions into a single lifecycle session.
+
+        Lifecycle hooks (at_start, at_end) are only called when entering/exiting the outermost session.
+        """
+        with self._execution_notify_lock:
+            is_outer = (self._lifecycle_depth == 0)
+            self._lifecycle_depth += 1
+            if is_outer:
+                self._notify_lifecycle("@start")
+
+        try:
+            yield
+        finally:
+            with self._execution_notify_lock:
+                self._lifecycle_depth -= 1
+                is_outer_end = (self._lifecycle_depth == 0)
+                if is_outer_end:
+                    self._notify_lifecycle("@end")
 
     def execute(self, source: Union[StrPathLike, IO[str]]) -> None:
         """Start execution of KoiLang content from a source.
@@ -79,41 +128,42 @@ class Runtime:
         Args:
             source: A filename (str) or a file-like object (IO[str]).
         """
-        self._notify_lifecycle("on_start")
-        try:
-            parser = Parser(source, config=self.parser_config)
-            self._parser = parser
-            self._current_position = -1
+        if self._parser is not None:
+            raise KoiRuntimeError("Parser already initialized", runtime=self)
+        with self.run_session():
+            try:
+                parser = Parser(source, config=self.parser_config)
+                self._parser = parser
+                self._current_position = -1
 
-            while True:
-                self._current_position += 1
+                while True:
+                    self._current_position += 1
 
-                # Fetch command
-                if self._cache_enabled and self._current_position < len(self._command_cache):
-                    # From cache
-                    cmd = self._command_cache[self._current_position]
-                else:
-                    # Beyond cache or cache disabled
-                    cmd = parser.next_command()
-                    if cmd is None:
-                        break
+                    # Fetch command
+                    if self._cache_enabled and self._current_position < len(self._command_cache):
+                        # From cache
+                        cmd = self._command_cache[self._current_position]
+                    else:
+                        # Beyond cache or cache disabled
+                        cmd = parser.next_command()
+                        if cmd is None:
+                            break
 
-                    if self._cache_enabled:
-                        self._command_cache.append(cmd)
-                        # Sync position to cache index in case it was just enabled
-                        self._current_position = len(self._command_cache) - 1
+                        if self._cache_enabled:
+                            self._command_cache.append(cmd)
+                            # Sync position to cache index in case it was just enabled
+                            self._current_position = len(self._command_cache) - 1
 
-                try:
-                    self._dispatch(cmd)
-                except JumpRequest as jump:
-                    if jump.runtime is not self:
-                        raise KoiRuntimeError("Jump request from another runtime", runtime=jump.runtime) from None
-                    # Handle jump by setting position
-                    # The loop will increment it, so we set it to target - 1
-                    self._current_position = jump.position - 1
-        finally:
-            self._notify_lifecycle("on_end")
-            self._parser = None
+                    try:
+                        self._dispatch(cmd)
+                    except JumpRequest as jump:
+                        if jump.runtime is not self:
+                            raise KoiRuntimeError("Jump request from another runtime", runtime=jump.runtime) from None
+                        # Handle jump by setting position
+                        # The loop will increment it, so we set it to target - 1
+                        self._current_position = jump.position - 1
+            finally:
+                self._parser = None
 
     def get_executor(self) -> Executor:
         """Create an Executor instance tied to this runtime.
@@ -142,10 +192,12 @@ class Runtime:
 
         return Writer(target, config)
 
-    def _notify_lifecycle(self, method_name: str) -> None:
-        for env in self.env_stack:
-            if hasattr(env, method_name):
-                getattr(env, method_name)()
+    def _notify_lifecycle(self, name: str, env: Any = None) -> None:
+        envs = self.env_stack if env is None else [env]
+        for e in envs:
+            method_name = self._get_method_name(name)
+            if hasattr(e, method_name):
+                self._execute_on_env(e, method_name, Command(name))
 
     def _dispatch(self, cmd: Command) -> Any:
         """Dispatch command through middleware chain."""
@@ -162,11 +214,11 @@ class Runtime:
 
     def _get_method_name(self, cmd_name: str) -> str:
         if cmd_name.startswith("@"):
-            return f"on_{cmd_name[1:]}"
+            return f"at_{cmd_name[1:]}"
         return f"do_{cmd_name}"
 
     def _get_command_name(self, method_name: str) -> str:
-        if method_name.startswith("on_"):
+        if method_name.startswith("at_"):
             return f"@{method_name[3:]}"
         if method_name.startswith("do_"):
             return method_name[3:]
@@ -186,7 +238,8 @@ class Runtime:
                 if hasattr(env, method_name):
                     return self._execute_on_env(env, method_name, cmd)
             else:
-                raise KoiRuntimeCommandNotFoundError(f"Command '{cmd.name}' not found", runtime=self)
+                if cmd.name != "@annotation":
+                    raise KoiRuntimeCommandNotFoundError(f"Command '{cmd.name}' not found", runtime=self)
         finally:
             self._current_command = None
 

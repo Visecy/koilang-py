@@ -11,6 +11,36 @@ dependencies = [
     "typing-extensions>=4.5.0",
 ]
 dynamic = ["version"]
+authors = [
+    { name = "visecy", email = "visecy@visecy.org" },
+]
+maintainers = [
+    { name = "ovizro", email = "ovizro@visecy.org" },
+]
+license = { text = "Apache-2.0" }
+keywords = ["koilang", "binding", "native"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/koilang-py"
+Repository = "https://github.com/yourusername/koilang-py.git"
+Issues = "https://github.com/yourusername/koilang-py/issues"
+Documentation = "https://github.com/yourusername/koilang-py#readme"
 
 [project.optional-dependencies]
 interactive = [
@@ -111,3 +141,9 @@ exclude_also = [
 ]
 
 ignore_errors = true
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:kola.*",
+    "ignore::DeprecationWarning:tests.test_kola",
+]

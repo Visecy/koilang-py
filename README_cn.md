@@ -36,7 +36,7 @@ class MyGame:
     def do_character(self, name, text):
         print(f"{name}: {text}")
 
-    def on_text(self, text):
+    def at_text(self, text):
         print(f"[叙述]: {text}")
 
 runtime = Runtime()
@@ -53,8 +53,10 @@ from koilang.runtime import Writer
 
 with Writer("story.koi") as w:
     w.do_character("Alice", "Hello World")
-    w.on_text("This is a story about a girl named Alice.")
+    w.at_text("This is a story about a girl named Alice.")
 ```
+
+**注意：** `Writer` 类还支持高级格式化选项和缩进管理。请参阅 [高级用法](#写入器格式化选项) 部分了解详情。
 
 ## CLI 用法
 
@@ -64,16 +66,70 @@ with Writer("story.koi") as w:
 python -m koilang story.koi
 ```
 
+**注意：** 如果未提供文件路径，CLI 将进入交互模式（需要 `prompt_toolkit` 以获得增强的 REPL 体验）。
+
 ### 常用参数
 
 - `-e`, `--env`：指定根环境对象（格式：`module:Attribute`）。
 - `--command-threshold`：识别命令所需的最少 `#` 数量（默认：1）。
 - `--fail-on-unknown-command`：如果找不到命令处理器则报错。
+- `--skip-annotations`：解析时跳过所有注释行。
+- `--preserve-empty-lines`：保留空行作为空文本命令。
+- `--preserve-indent`：保留文本部分的前导缩进。
 
 示例：
 ```bash
 python -m koilang story.koi -e my_game:GameEnv --command-threshold 0
 ```
+
+### 交互式命令行
+
+当未提供文件或使用 `-i`/`--interactive` 标志时，CLI 将进入具有丰富 REPL 体验的交互模式：
+
+```bash
+# 直接进入交互模式
+python -m koilang
+
+# 执行文件后进入交互模式
+python -m koilang story.koi -i
+
+# 加载环境后进入交互模式
+python -m koilang -e my_game:GameEnv
+```
+
+**功能特性：**
+
+- **增强的 REPL**：由 `prompt_toolkit` 提供支持，包含语法高亮、自动补全和命令历史
+- **多行输入**：支持使用反斜杠续行的多行命令
+- **内置命令**：
+  - `#exit` 或 `#quit`：退出交互模式
+  - `ctrl+d`：同样可以退出交互模式
+- **环境栈**：在会话期间动态管理环境
+- **会话生命周期**：自动处理 `at_start` 和 `at_end` 钩子
+
+**示例会话：**
+
+```bash
+$ python -m koilang
+KoiLang 2.0.0b1 on Python 3.10.18 (main, Jun  4 2025, 17:36:27) [Clang 20.1.4 ]
+Type "#exit/#quit" or "ctrl+d" to exit interactive mode
+
+koi> #character Alice "Hello!"
+2026-03-14 23:44:56,642 koilang.__main__ WARNING - command 'character' not found
+koi> Hello World
+2026-03-14 23:45:16,474 koilang.__main__ INFO - text: 'Hello World'
+koi> #exit
+```
+
+**安装交互式模式依赖：**
+
+要使用由 `prompt_toolkit` 提供的增强交互模式，需要安装 interactive 额外依赖：
+
+```bash
+pip install koilang[interactive]
+```
+
+如果没有安装 `prompt_toolkit`，当通过管道输入时，CLI 将回退到基本的 stdin 模式。
 
 ## KoiLang 语法
 
@@ -96,7 +152,7 @@ KoiLang 中有三种类型的行，通过语法区分：
   ## This is a comment
   ```
 
-> **重要概念**：在 KoiLang 中，**文本行和注释行本质上是特殊的命令**。它们分别对应命令名 `@text` 和 `@annotation`，可以通过对应的处理器方法 `on_text` 和 `on_annotation` 来捕获和处理。
+> **重要概念**：在 KoiLang 中，**文本行和注释行本质上是特殊的命令**。它们分别对应命令名 `@text` 和 `@annotation`，可以通过对应的处理器方法 `at_text` 和 `at_annotation` 来捕获和处理。
 
 ### 命令和参数
 
@@ -139,11 +195,11 @@ KoiLang 支持丰富的参数类型，可自然映射到 Python：
 
 **处理方式：**
 
-在你的环境类中，使用 `on_text` 方法处理文本行：
+在你的环境类中，使用 `at_text` 方法处理文本行：
 
 ```python
 class MyGame:
-    def on_text(self, text):
+    def at_text(self, text):
         """处理文本行内容。
         
         对应 KoiLang 中的文本行（没有 # 前缀的行）
@@ -159,11 +215,11 @@ class MyGame:
 
 ```koilang
 #character Alice "Hello!"
-This is a text line.      → 触发 on_text("This is a text line.")
-Another line here.        → 触发 on_text("Another line here.")
+This is a text line.      → 触发 at_text("This is a text line.")
+Another line here.        → 触发 at_text("Another line here.")
 ```
 
-**注意：** 每个文本行都会触发单独的 `on_text` 调用。如果你有多行连续的文本，每行都会单独调用 `on_text`，除非解析器配置为保留空行或缩进。
+**注意：** 每个文本行都会触发单独的 `at_text` 调用。如果你有多行连续的文本，每行都会单独调用 `at_text`，除非解析器配置为保留空行或缩进。
 
 ### 注释行
 
@@ -171,11 +227,11 @@ Another line here.        → 触发 on_text("Another line here.")
 
 **处理方式：**
 
-在你的环境类中，你可以使用 `on_annotation` 方法捕获注释行（尽管注释通常被忽略）：
+在你的环境类中，你可以使用 `at_annotation` 方法捕获注释行（尽管注释通常被忽略）：
 
 ```python
 class MyGame:
-    def on_annotation(self, text):
+    def at_annotation(self, text):
         """处理注释行内容。
         
         对应 KoiLang 中的注释行（以 ## 开头的行）
@@ -281,7 +337,7 @@ def logger_middleware(runtime, cmd, next_handler):
     return result
 
 class Scene:
-    def on_start(self): print("Scene started")
+    def at_start(self): print("Scene started")
     def do_bg(self, name): print(f"Background: {name}")
 
 class Character:
@@ -434,75 +490,46 @@ executor[Player, 0].do_status()  # 第一个 Player 实例
 executor[Player, -1].do_status() # 最后一个 Player 实例
 ```
 
+### 会话管理
+
+`run_session()` 上下文管理器将多次执行分组到单个生命周期会话中：
+
+```python
+from koilang.runtime import Runtime
+import io
+
+class GameEnv:
+    def at_start(self):
+        print("Game started")
+    
+    def at_end(self):
+        print("Game ended")
+
+runtime = Runtime()
+runtime.env_enter(GameEnv())
+
+# 生命周期钩子（at_start/at_end）只调用一次
+with runtime.run_session():
+    runtime.execute(io.StringIO("#cmd1"))
+    runtime.execute(io.StringIO("#cmd2"))
+# 输出："Game started"（一次）和 "Game ended"（一次）
+```
+
+当你想要执行多个文件或输入，同时确保生命周期钩子只在整个会话的开始和结束时调用时，这非常有用。
+
 ### 写入器格式化选项
 
 `Writer` 类支持细粒度的格式控制：
 
 ```python
 from koilang.runtime import Writer
-from koilang.model import FormatterOptions, WriterConfig
 import io
 
 # 基本用法
 output = io.StringIO()
 with Writer(output) as w:
     w.do_heading("Title")
-    w.on_text("Content here")
-
-# 使用自定义格式化选项
-config = WriterConfig(
-    global_options=FormatterOptions(indent=2, compact=True),
-    command_threshold=1
-)
-
-with Writer(output, config=config) as w:
-    w.do_cmd(1, 2, 3)  # 使用紧凑格式
-```
-
-**可用的 FormatterOptions：**
-
-| 选项 | 类型 | 描述 |
-|--------|------|-------------|
-| `indent` | int | 缩进空格数 |
-| `use_tabs` | bool | 使用制表符代替空格 |
-| `compact` | bool | 移除不必要的空白 |
-| `newline_before` | bool | 在命令前添加换行 |
-| `newline_after` | bool | 在命令后添加换行 |
-| `force_quotes_for_vars` | bool | 强制为字面量添加引号 |
-| `number_format` | str | 整数的自定义格式 |
-| `float_format` | str | 浮点数的自定义格式 |
-| `newline_before_param` | bool | 在每个参数前换行 |
-| `newline_after_param` | bool | 在每个参数后换行 |
-
-**使用上下文管理器的临时选项：**
-
-```python
-output = io.StringIO()
-with Writer(output) as w:
-    w.do_cmd1(1, 2)
-    
-    # 对一块命令应用紧凑格式
-    with w.with_options(compact=True):
-        w.do_cmd2(3, 4)
-        w.do_cmd3(5, 6)
-    
-    # 恢复默认格式
-    w.do_cmd4(7, 8)
-```
-
-**单命令的流畅 API：**
-
-```python
-output = io.StringIO()
-with Writer(output) as w:
-    # 对单个命令应用选项
-    w.with_options(compact=True).do_tight_cmd(1, 2)
-    
-    # 针对特定命令
-    with w.with_options(compact=True, target_commands=["cmd1", "cmd2"]):
-        w.do_cmd1(1, 2)  # 使用紧凑格式
-        w.do_cmd2(3, 4)  # 使用紧凑格式
-        w.do_cmd3(5, 6)  # 使用默认格式
+    w.at_text("Content here")
 ```
 
 **缩进管理：**
@@ -527,6 +554,50 @@ with Writer(output) as w:
         w.do_content()
 ```
 
+**临时格式化选项：**
+
+```python
+output = io.StringIO()
+with Writer(output) as w:
+    w.do_cmd1(1, 2)
+    
+    # 对一块命令应用紧凑格式
+    with w.with_options(compact=True):
+        w.do_cmd2(3, 4)
+        w.do_cmd3(5, 6)
+    
+    # 恢复默认格式
+    w.do_cmd4(7, 8)
+    
+    # 单命令的流畅 API
+    w.with_options(compact=True).do_tight_cmd(1, 2)
+    
+    # 针对特定命令
+    with w.with_options(compact=True, target_commands=["cmd1", "cmd2"]):
+        w.do_cmd1(1, 2)  # 使用紧凑格式
+        w.do_cmd2(3, 4)  # 使用紧凑格式
+        w.do_cmd3(5, 6)  # 使用默认格式
+```
+
+**可用的格式化选项：**
+
+`with_options()` 方法接受以下参数：
+
+| 选项 | 类型 | 描述 |
+|--------|------|-------------|
+| `indent` | int | 缩进空格数 |
+| `use_tabs` | bool | 使用制表符代替空格 |
+| `compact` | bool | 移除不必要的空白 |
+| `newline_before` | bool | 在命令前添加换行 |
+| `newline_after` | bool | 在命令后添加换行 |
+| `force_quotes_for_vars` | bool | 强制为字面量添加引号 |
+| `number_format` | str | 整数的自定义格式 |
+| `float_format` | str | 浮点数的自定义格式 |
+| `newline_before_param` | bool | 在每个参数前换行 |
+| `newline_after_param` | bool | 在每个参数后换行 |
+
+对于高级配置，你还可以将 `WriterConfig` 对象传递给 `Writer` 构造函数。
+
 ## 迁移指南（从旧版 `kola`）
 
 `koilang-py` 是旧版 `kola` 模块的继任者。本指南帮助你从旧的 `kola` API 迁移到新的 `koilang` API。
@@ -536,12 +607,12 @@ with Writer(output) as w:
 | 特性 | 旧版 `kola` | 新版 `koilang` |
 | --- | --- | --- |
 | **主类** | `KoiLang` | `Runtime` |
-| **装饰器** | `@kola_command`, `@kola_text` | 基于约定 (`do_name`, `on_name`) |
+| **装饰器** | `@kola_command`, `@kola_text` | 基于约定 (`do_name`, `at_name`) |
 | **解析** | `parse()`, `parse_file()` | `execute()`（支持 IO 和文件） |
 | **扩展** | 基于继承 | 组合（运行时 + 环境栈） |
-| **文本处理器** | `@kola_text` 装饰器 | `on_text()` 方法 |
+| **文本处理器** | `@kola_text` 装饰器 | `at_text()` 方法 |
 | **数字命令** | `@kola_number` 装饰器 | `do_114()`, `do_1919()` 方法 |
-| **环境** | 嵌套 `Environment` 类 | 任何带有 `do_`/`on_` 方法的 Python 对象 |
+| **环境** | 嵌套 `Environment` 类 | 任何带有 `do_`/`at_` 方法的 Python 对象 |
 | **CLI** | `python -m kola file.kola` | `python -m koilang file.koi` |
 
 ### 基本迁移示例
@@ -574,7 +645,7 @@ class MyEnv:
     def do_greet(self, name):
         print(f"Hello, {name}!")
     
-    def on_text(self, text):
+    def at_text(self, text):
         print(f"Text: {text}")
 
 # 用法
@@ -608,8 +679,8 @@ class NewStyle:
     # 方法名成为命令名
     def do_custom_name(self): ...
     
-    # 文本处理器使用 on_text
-    def on_text(self, text): ...
+    # 文本处理器使用 at_text
+    def at_text(self, text): ...
     
     # 数字命令使用 do_<number>
     def do_114(self): ...  # 处理 #114
@@ -725,7 +796,7 @@ import io
 # 文件输出
 with Writer("output.koi") as w:
     w.do_cmd(arg1, arg2)
-    w.on_text("Some text")
+    w.at_text("Some text")
 
 # 字符串输出
 output = io.StringIO()
@@ -786,10 +857,10 @@ class FastFile:
     def __init__(self):
         self._file = None
     
-    def on_start(self):
+    def at_start(self):
         self._file = None
     
-    def on_end(self):
+    def at_end(self):
         self.do_end()
     
     def do_file(self, path: str, encoding: str = "utf-8") -> None:
@@ -805,7 +876,7 @@ class FastFile:
             self._file.close()
             self._file = None
     
-    def on_text(self, text: str) -> None:
+    def at_text(self, text: str) -> None:
         if not self._file:
             raise OSError("write texts before the file open")
         self._file.write(text)
@@ -818,8 +889,8 @@ runtime.execute("makefiles.koi")
 
 ### 变更总结
 
-1. **不再继承**：你不再从 `KoiLang` 继承，而是创建普通的 Python 类
-2. **约定优于配置**：使用 `do_` 前缀表示命令，`on_` 前缀表示特殊处理器
+1. **不再继承**：不再从 `KoiLang` 继承，而是创建普通的 Python 类
+2. **约定优于配置**：使用 `do_` 前缀表示命令，`at_` 前缀表示特殊处理器
 3. **以运行时为中心**：所有执行都通过 `Runtime` 实例进行
 4. **环境栈**：使用 `env_enter()`/`env_exit()` 代替嵌套环境类
 5. **统一解析**：`execute()` 方法处理字符串和类文件对象

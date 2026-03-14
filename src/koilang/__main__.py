@@ -77,7 +77,7 @@ def get_version() -> str:
 
 def print_banner() -> None:
     """Print the interactive mode banner with version and copyright info."""
-    print(f"KoiLang {get_version()} on Python {sys.version_info}")
+    print(f"KoiLang {get_version()} on Python {sys.version}")
     print('Type "#exit/#quit" or "ctrl+d" to exit interactive mode')
     print()
 
@@ -130,28 +130,29 @@ def run_interactive_mode(
     )
 
     try:
-        while True:
-            try:
-                lines: list[str] = []
-                while True:
-                    if lines:
-                        prompt = ".... "
-                    else:
-                        prompt = "koi> "
-                    line = session.prompt(prompt)
-                    lines.append(line)
-                    if not line.endswith("\\"):
-                        break
-                full_input = "\n".join(lines)
-                runtime.execute(StringIO(full_input))
-            except EOFError:
-                break
-            except Exception:
-                logger.error("error executing command", exc_info=True)
-            except KeyboardInterrupt:
-                continue
+        with runtime.run_session():
+            while True:
+                try:
+                    lines: list[str] = []
+                    while True:
+                        if lines:
+                            prompt = ".... "
+                        else:
+                            prompt = "koi> "
+                        line = session.prompt(prompt)
+                        lines.append(line)
+                        if not line.endswith("\\"):
+                            break
+                    full_input = "\n".join(lines)
+                    runtime.execute(StringIO(full_input))
+                except EOFError:
+                    break
+                except Exception:
+                    logger.error("error executing command", exc_info=True)
+                except KeyboardInterrupt:
+                    continue
     finally:
-        runtime.env_exit(interactive_env)
+        runtime.env_exit(interactive_env, recursive=True)
 
 
 def run_stdin_mode(
@@ -184,12 +185,15 @@ def run_stdin_mode(
             sys.exit(1)
 
     try:
-        runtime.execute(sys.stdin)
+        with runtime.run_session():
+            runtime.execute(sys.stdin)
     except InteractiveExitError:
         pass
     except Exception:
         logger.error("error executing stdin input", exc_info=True)
         sys.exit(1)
+    finally:
+        runtime.env_exit(interactive_env)
 
 
 def main() -> None:

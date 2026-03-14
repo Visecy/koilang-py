@@ -17,7 +17,7 @@ class _EnvProxy:
 
     def __getattr__(self, name: str) -> Any:
         method = getattr(self.env, name)
-        if not name.startswith("do_") and not name.startswith("on_"):
+        if not name.startswith("do_") and not name.startswith("at_"):
             return method
         elif not callable(method):
             return method
@@ -51,7 +51,7 @@ class Executor:
         return self.runtime.env_stack
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("do_") or name.startswith("on_"):
+        if name.startswith("do_") or name.startswith("at_"):
 
             def virtual_command(*args: Any, **kwargs: Any) -> Any:
                 cmd_name = self.runtime._get_command_name(name)

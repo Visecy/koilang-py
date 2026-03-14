@@ -6,8 +6,8 @@ def test_basic_writer():
     output = io.StringIO()
     with Writer(output) as w:
         w.do_heading("Title")
-        w.on_text("Hello world")
-        w.on_annotation("Note")
+        w.at_text("Hello world")
+        w.at_annotation("Note")
         w.do_cmd(1, 2, a=3)
 
     content = output.getvalue()
@@ -90,8 +90,8 @@ def test_runtime_get_writer_inherit_threshold():
 def test_writer_on_shortcuts():
     output = io.StringIO()
     with Writer(output) as w:
-        w.on_text("Some text")
-        w.on_annotation("Some note")
+        w.at_text("Some text")
+        w.at_annotation("Some note")
 
     content = output.getvalue()
     assert "Some text" in content

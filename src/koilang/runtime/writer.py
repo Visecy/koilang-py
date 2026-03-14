@@ -34,15 +34,15 @@ class _OptionsProxy:
         self._writer._options_stack.pop()
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("do_") or name.startswith("on_"):
+        if name.startswith("do_") or name.startswith("at_"):
 
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 cmd_name = self._writer._get_command_name(name)
                 if self._targets is None or cmd_name in self._targets:
                     # Apply options for this specific call
-                    if name == "on_text":
+                    if name == "at_text":
                         cmd = Command.new_text(args[0] if args else "")
-                    elif name == "on_annotation":
+                    elif name == "at_annotation":
                         cmd = Command.new_annotation(args[0] if args else "")
                     else:
                         cmd = Command(cmd_name, _build_params(args, kwargs))
@@ -64,7 +64,7 @@ class Writer:
         >>> with Writer("output.koi") as w:
         ...     w.do_heading("Title")
         ...     with w.indent():
-        ...         w.on_text("Some content")
+        ...         w.at_text("Some content")
         ...         w.with_options(compact=True).do_tight_cmd()
     """
 
@@ -151,20 +151,20 @@ class Writer:
                 self._core_writer.write_command(command)
 
     def _get_command_name(self, method_name: str) -> str:
-        if method_name.startswith("on_"):
+        if method_name.startswith("at_"):
             return f"@{method_name[3:]}"
         if method_name.startswith("do_"):
             return method_name[3:]
         return method_name
 
     def __getattr__(self, name: str) -> Any:
-        if name.startswith("do_") or name.startswith("on_"):
+        if name.startswith("do_") or name.startswith("at_"):
 
             def wrapper(*args: Any, **kwargs: Any) -> None:
                 cmd_name = self._get_command_name(name)
-                if name == "on_text":
+                if name == "at_text":
                     cmd = Command.new_text(args[0] if args else "")
-                elif name == "on_annotation":
+                elif name == "at_annotation":
                     cmd = Command.new_annotation(args[0] if args else "")
                 else:
                     cmd = Command(cmd_name, _build_params(args, kwargs))

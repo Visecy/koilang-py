@@ -36,7 +36,7 @@ class MyGame:
     def do_character(self, name, text):
         print(f"{name}: {text}")
 
-    def on_text(self, text):
+    def at_text(self, text):
         print(f"[Narrative]: {text}")
 
 runtime = Runtime()
@@ -46,15 +46,17 @@ runtime.execute(io.StringIO("#character Alice \"Hi!\"\nRegular text here."))
 
 ### Programmatic Generation (Writer)
 
-The `Writer` class allow you to generate KoiLang code programmatically.
+The `Writer` class allows you to generate KoiLang code programmatically.
 
 ```python
 from koilang.runtime import Writer
 
 with Writer("story.koi") as w:
     w.do_character("Alice", "Hello World")
-    w.on_text("This is a story about a girl named Alice.")
+    w.at_text("This is a story about a girl named Alice.")
 ```
+
+**Note:** The `Writer` class also supports advanced formatting options and indentation management. See the [Advanced Usage](#writer-formatting-options) section for details.
 
 ## CLI Usage
 
@@ -64,16 +66,70 @@ You can run KoiLang files directly using the command line interface:
 python -m koilang story.koi
 ```
 
+**Note:** If the file path is not provided, the CLI will enter interactive mode (requires `prompt_toolkit` for enhanced REPL experience).
+
 ### Common Arguments
 
 - `-e`, `--env`: Specify the root environment object (format: `module:Attribute`).
 - `--command-threshold`: Minimum number of `#` to identify a command (default: 1).
 - `--fail-on-unknown-command`: Raise error if a command handler is not found.
+- `--skip-annotations`: Skip all annotation lines during parsing.
+- `--preserve-empty-lines`: Preserve empty lines as empty text commands.
+- `--preserve-indent`: Preserve leading indentation in text sections.
 
 Example:
 ```bash
 python -m koilang story.koi -e my_game:GameEnv --command-threshold 0
 ```
+
+### Interactive Mode
+
+When no file is provided, or when using the `-i`/`--interactive` flag, the CLI enters interactive mode with a rich REPL experience:
+
+```bash
+# Enter interactive mode directly
+python -m koilang
+
+# Enter interactive mode after executing a file
+python -m koilang story.koi -i
+
+# Load an environment and enter interactive mode
+python -m koilang -e my_game:GameEnv
+```
+
+**Features:**
+
+- **Enhanced REPL**: Powered by `prompt_toolkit` with syntax highlighting, auto-completion, and command history
+- **Multi-line Input**: Support for multi-line commands using backslash continuation
+- **Built-in Commands**: 
+  - `#exit` or `#quit`: Exit interactive mode
+  - `ctrl+d`: Also exits interactive mode
+- **Environment Stack**: Dynamically manage environments during the session
+- **Session Lifecycle**: Automatically handles `at_start` and `at_end` hooks
+
+**Example Session:**
+
+```bash
+$ python -m koilang
+KoiLang 2.0.0b1 on Python 3.10.18 (main, Jun  4 2025, 17:36:27) [Clang 20.1.4 ]
+Type "#exit/#quit" or "ctrl+d" to exit interactive mode
+
+koi> #character Alice "Hello!"
+2026-03-14 23:44:56,642 koilang.__main__ WARNING - command 'character' not found
+koi> Hello World
+2026-03-14 23:45:16,474 koilang.__main__ INFO - text: 'Hello World'
+koi> #exit
+```
+
+**Installation for Interactive Mode:**
+
+To use the enhanced interactive mode with `prompt_toolkit`, install with the interactive extra:
+
+```bash
+pip install koilang[interactive]
+```
+
+Without `prompt_toolkit`, the CLI will fall back to basic stdin mode when input is piped.
 
 ## KoiLang Syntax
 
@@ -96,7 +152,7 @@ There are three types of lines in KoiLang, distinguished by their syntax:
   ## This is a comment
   ```
 
-> **Important Concept**: In KoiLang, **text lines and annotation lines are essentially special commands**. They correspond to command names `@text` and `@annotation` respectively, and can be captured and handled through their corresponding handler methods `on_text` and `on_annotation`.
+> **Important Concept**: In KoiLang, **text lines and annotation lines are essentially special commands**. They correspond to command names `@text` and `@annotation` respectively, and can be captured and handled through their corresponding handler methods `at_text` and `at_annotation`.
 
 ### Commands and Parameters
 
@@ -139,11 +195,11 @@ Text lines (lines without `#` prefix) are **special commands** in KoiLang with t
 
 **Handling:**
 
-In your environment class, handle text lines using the `on_text` method:
+In your environment class, handle text lines using the `at_text` method:
 
 ```python
 class MyGame:
-    def on_text(self, text):
+    def at_text(self, text):
         """Handle text line content.
         
         Corresponds to text lines in KoiLang (lines without # prefix)
@@ -159,11 +215,11 @@ class MyGame:
 
 ```koilang
 #character Alice "Hello!"
-This is a text line.      → triggers on_text("This is a text line.")
-Another line here.        → triggers on_text("Another line here.")
+This is a text line.      → triggers at_text("This is a text line.")
+Another line here.        → triggers at_text("Another line here.")
 ```
 
-**Note:** Each text line triggers a separate `on_text` call. If you have multiple consecutive text lines, each line will call `on_text` individually unless the parser is configured to preserve empty lines or indentation.
+**Note:** Each text line triggers a separate `at_text` call. If you have multiple consecutive text lines, each line will call `at_text` individually unless the parser is configured to preserve empty lines or indentation.
 
 ### Annotation Lines
 
@@ -171,11 +227,11 @@ Annotation lines (lines starting with `##` or more `#`) are also **special comma
 
 **Handling:**
 
-In your environment class, you can capture annotation lines using the `on_annotation` method (though annotations are usually ignored):
+In your environment class, you can capture annotation lines using the `at_annotation` method (though annotations are usually ignored):
 
 ```python
 class MyGame:
-    def on_annotation(self, text):
+    def at_annotation(self, text):
         """Handle annotation line content.
         
         Corresponds to annotation lines in KoiLang (lines starting with ##)
@@ -281,7 +337,7 @@ def logger_middleware(runtime, cmd, next_handler):
     return result
 
 class Scene:
-    def on_start(self): print("Scene started")
+    def at_start(self): print("Scene started")
     def do_bg(self, name): print(f"Background: {name}")
 
 class Character:
@@ -434,75 +490,46 @@ executor[Player, 0].do_status()  # First Player instance
 executor[Player, -1].do_status() # Last Player instance
 ```
 
+### Session Management
+
+The `run_session()` context manager groups multiple executions into a single lifecycle session:
+
+```python
+from koilang.runtime import Runtime
+import io
+
+class GameEnv:
+    def at_start(self):
+        print("Game started")
+    
+    def at_end(self):
+        print("Game ended")
+
+runtime = Runtime()
+runtime.env_enter(GameEnv())
+
+# Lifecycle hooks (at_start/at_end) are only called once
+with runtime.run_session():
+    runtime.execute(io.StringIO("#cmd1"))
+    runtime.execute(io.StringIO("#cmd2"))
+# Prints: "Game started" (once) and "Game ended" (once)
+```
+
+This is useful when you want to execute multiple files or inputs while ensuring lifecycle hooks are only called at the beginning and end of the entire session.
+
 ### Writer Formatting Options
 
 The `Writer` class supports fine-grained formatting control:
 
 ```python
 from koilang.runtime import Writer
-from koilang.model import FormatterOptions, WriterConfig
 import io
 
 # Basic usage
 output = io.StringIO()
 with Writer(output) as w:
     w.do_heading("Title")
-    w.on_text("Content here")
-
-# With custom formatting options
-config = WriterConfig(
-    global_options=FormatterOptions(indent=2, compact=True),
-    command_threshold=1
-)
-
-with Writer(output, config=config) as w:
-    w.do_cmd(1, 2, 3)  # Uses compact formatting
-```
-
-**Available FormatterOptions:**
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `indent` | int | Number of spaces for indentation |
-| `use_tabs` | bool | Use tabs instead of spaces |
-| `compact` | bool | Remove unnecessary whitespace |
-| `newline_before` | bool | Add newline before command |
-| `newline_after` | bool | Add newline after command |
-| `force_quotes_for_vars` | bool | Force quotes around literals |
-| `number_format` | str | Custom format for integers |
-| `float_format` | str | Custom format for floats |
-| `newline_before_param` | bool | Newline before each parameter |
-| `newline_after_param` | bool | Newline after each parameter |
-
-**Temporary Options with Context Manager:**
-
-```python
-output = io.StringIO()
-with Writer(output) as w:
-    w.do_cmd1(1, 2)
-    
-    # Apply compact formatting to a block of commands
-    with w.with_options(compact=True):
-        w.do_cmd2(3, 4)
-        w.do_cmd3(5, 6)
-    
-    # Back to default formatting
-    w.do_cmd4(7, 8)
-```
-
-**Fluent API for Single Commands:**
-
-```python
-output = io.StringIO()
-with Writer(output) as w:
-    # Apply options to a single command
-    w.with_options(compact=True).do_tight_cmd(1, 2)
-    
-    # Target specific commands
-    with w.with_options(compact=True, target_commands=["cmd1", "cmd2"]):
-        w.do_cmd1(1, 2)  # Uses compact formatting
-        w.do_cmd2(3, 4)  # Uses compact formatting
-        w.do_cmd3(5, 6)  # Uses default formatting
+    w.at_text("Content here")
 ```
 
 **Indentation Management:**
@@ -527,6 +554,50 @@ with Writer(output) as w:
         w.do_content()
 ```
 
+**Temporary Formatting Options:**
+
+```python
+output = io.StringIO()
+with Writer(output) as w:
+    w.do_cmd1(1, 2)
+    
+    # Apply compact formatting to a block of commands
+    with w.with_options(compact=True):
+        w.do_cmd2(3, 4)
+        w.do_cmd3(5, 6)
+    
+    # Back to default formatting
+    w.do_cmd4(7, 8)
+    
+    # Fluent API for single commands
+    w.with_options(compact=True).do_tight_cmd(1, 2)
+    
+    # Target specific commands
+    with w.with_options(compact=True, target_commands=["cmd1", "cmd2"]):
+        w.do_cmd1(1, 2)  # Uses compact formatting
+        w.do_cmd2(3, 4)  # Uses compact formatting
+        w.do_cmd3(5, 6)  # Uses default formatting
+```
+
+**Available Formatting Options:**
+
+The `with_options()` method accepts any of the following parameters:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `indent` | int | Number of spaces for indentation |
+| `use_tabs` | bool | Use tabs instead of spaces |
+| `compact` | bool | Remove unnecessary whitespace |
+| `newline_before` | bool | Add newline before command |
+| `newline_after` | bool | Add newline after command |
+| `force_quotes_for_vars` | bool | Force quotes around literals |
+| `number_format` | str | Custom format for integers |
+| `float_format` | str | Custom format for floats |
+| `newline_before_param` | bool | Newline before each parameter |
+| `newline_after_param` | bool | Newline after each parameter |
+
+For advanced configuration, you can also pass a `WriterConfig` object to the `Writer` constructor.
+
 ## Migration Guide (from legacy `kola`)
 
 `koilang-py` is the successor to the legacy `kola` module. This guide helps you migrate from the old `kola` API to the new `koilang` API.
@@ -536,12 +607,12 @@ with Writer(output) as w:
 | Feature | Legacy `kola` | New `koilang` |
 | --- | --- | --- |
 | **Main Class** | `KoiLang` | `Runtime` |
-| **Decorators** | `@kola_command`, `@kola_text` | Convention-based (`do_name`, `on_name`) |
+| **Decorators** | `@kola_command`, `@kola_text` | Convention-based (`do_name`, `at_name`) |
 | **Parsing** | `parse()`, `parse_file()` | `execute()` (supports IO and files) |
 | **Extension** | Inheritance based | Composition (Runtime + Env Stack) |
-| **Text Handler** | `@kola_text` decorator | `on_text()` method |
+| **Text Handler** | `@kola_text` decorator | `at_text()` method |
 | **Number Commands** | `@kola_number` decorator | `do_114()`, `do_1919()` methods |
-| **Environment** | Nested `Environment` class | Any Python object with `do_`/`on_` methods |
+| **Environment** | Nested `Environment` class | Any Python object with `do_`/`at_` methods |
 | **CLI** | `python -m kola file.kola` | `python -m koilang file.koi` |
 
 ### Basic Migration Example
@@ -574,7 +645,7 @@ class MyEnv:
     def do_greet(self, name):
         print(f"Hello, {name}!")
     
-    def on_text(self, text):
+    def at_text(self, text):
         print(f"Text: {text}")
 
 # Usage
@@ -608,8 +679,8 @@ class NewStyle:
     # Method name becomes command name
     def do_custom_name(self): ...
     
-    # Text handler uses on_text
-    def on_text(self, text): ...
+    # Text handler uses at_text
+    def at_text(self, text): ...
     
     # Number commands use do_<number>
     def do_114(self): ...  # Handles #114
@@ -725,7 +796,7 @@ import io
 # File output
 with Writer("output.koi") as w:
     w.do_cmd(arg1, arg2)
-    w.on_text("Some text")
+    w.at_text("Some text")
 
 # String output
 output = io.StringIO()
@@ -786,10 +857,10 @@ class FastFile:
     def __init__(self):
         self._file = None
     
-    def on_start(self):
+    def at_start(self):
         self._file = None
     
-    def on_end(self):
+    def at_end(self):
         self.do_end()
     
     def do_file(self, path: str, encoding: str = "utf-8") -> None:
@@ -805,7 +876,7 @@ class FastFile:
             self._file.close()
             self._file = None
     
-    def on_text(self, text: str) -> None:
+    def at_text(self, text: str) -> None:
         if not self._file:
             raise OSError("write texts before the file open")
         self._file.write(text)
@@ -819,7 +890,7 @@ runtime.execute("makefiles.koi")
 ### Summary of Changes
 
 1. **No more inheritance**: Instead of inheriting from `KoiLang`, you create plain Python classes
-2. **Convention over configuration**: Use `do_` prefix for commands, `on_` prefix for special handlers
+2. **Convention over configuration**: Use `do_` prefix for commands, `at_` prefix for special handlers
 3. **Runtime-centric**: All execution goes through a `Runtime` instance
 4. **Environment stack**: Use `env_enter()`/`env_exit()` instead of nested environment classes
 5. **Unified parsing**: `execute()` method handles both strings and file-like objects

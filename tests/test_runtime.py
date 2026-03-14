@@ -3,6 +3,8 @@ from typing import Any, Callable
 from koilang.runtime import Executor, Runtime, env_enter, env_exit
 from koilang.core import Command
 from koilang.runtime.context import current_command
+from koilang.runtime.exception import KoiRuntimeCommandNotFoundError
+import pytest
 
 
 class TestEnv:
@@ -27,10 +29,10 @@ class TestCommandSet:
 
     do_enter = TestEnv.do_enter
 
-    def on_text(self, text: str) -> None:
+    def at_text(self, text: str) -> None:
         self.last_text = text
 
-    def on_start(self) -> None:
+    def at_start(self) -> None:
         self.cmd_count = 0
         self.last_text = None
 
@@ -170,3 +172,38 @@ def test_executor() -> None:
     assert len(executor.env_stack) == 1
     assert isinstance(executor.env_stack[0], TestCommandSet)
     assert executor.env_stack[0].cmd_count == 4
+
+
+def test_annotation_without_handler() -> None:
+    """Test that @annotation commands are silently skipped when no handler exists."""
+    runtime = Runtime()
+    runtime.env_enter(TestCommandSet())
+    
+    # Should not raise exception even without at_annotation handler
+    runtime.execute(io.StringIO("## This is an annotation\n#cmd"))
+    assert runtime.env_stack[0].cmd_count == 1
+
+
+def test_other_command_without_handler() -> None:
+    """Test that other commands still raise exception when handler not found."""
+    runtime = Runtime()
+    runtime.env_enter(TestCommandSet())
+    
+    # Should raise KoiRuntimeCommandNotFoundError for unknown commands
+    with pytest.raises(KoiRuntimeCommandNotFoundError):
+        runtime.execute(io.StringIO("#unknown_command"))
+
+
+def test_annotation_with_handler() -> None:
+    """Test that @annotation commands are handled correctly when handler exists."""
+    annotations = []
+    
+    class AnnotationHandler:
+        def at_annotation(self, text: str) -> None:
+            annotations.append(text)
+    
+    runtime = Runtime()
+    runtime.env_enter(AnnotationHandler())
+    
+    runtime.execute(io.StringIO("## Annotation 1\n## Annotation 2"))
+    assert annotations == ["Annotation 1", "Annotation 2"]
