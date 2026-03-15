@@ -29,7 +29,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Free Threading",
     "Programming Language :: Rust",
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -37,10 +39,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/koilang-py"
-Repository = "https://github.com/yourusername/koilang-py.git"
-Issues = "https://github.com/yourusername/koilang-py/issues"
-Documentation = "https://github.com/yourusername/koilang-py#readme"
+Homepage = "https://github.com/visecy/koilang-py"
+Repository = "https://github.com/visecy/koilang-py.git"
+Issues = "https://github.com/visecy/koilang-py/issues"
 
 [project.optional-dependencies]
 interactive = [
@@ -58,6 +59,9 @@ features = ["pyo3/extension-module"]
 module-name = "koilang.core"
 python-source = "src"
 python-packages = ["koilang", "kola"]
+include = [
+    { path = "LICENSE", format = "sdist" }
+]
 
 [dependency-groups]
 dev = [
